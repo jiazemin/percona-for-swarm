@@ -1,0 +1,34 @@
+#!/bin/bash
+
+if [ -z "$MYSQL_PORT" ]; then
+  MYSQL_PORT=3306
+fi
+
+MYSQL_CMDLINE="mysql -u root -p${MYSQL_ROOT_PASSWORD} -h 127.0.0.1 -P ${MYSQL_PORT}"
+ERR_FILE="${1:-/dev/null}"
+
+status=$($MYSQL_CMDLINE -e "SHOW SLAVE STATUS\G" 2>${ERR_FILE})
+
+if ! echo "$status" | grep -qs "Slave_IO_Running: Yes"    ||
+   ! echo "$status" | grep -qs "Slave_SQL_Running: Yes"   ||
+   ! echo "$status" | grep -qs "Seconds_Behind_Master: 0" ; then
+  echo -en "HTTP/1.1 503 Service Unavailable\r\n"
+  echo -en "Content-Type: text/plain\r\n"
+  echo -en "Connection: close\r\n"
+  echo -en "Content-Length: 29\r\n"
+  echo -en "\r\n"
+  echo -en "Replication is not healthy.\r\n"
+  sleep 0.1
+  exit 1
+fi
+
+echo -en "HTTP/1.1 200 OK\r\n"
+echo -en "Content-Type: text/plain\r\n"
+echo -en "Connection: close\r\n"
+echo -en "Content-Length: 25\r\n"
+echo -en "\r\n"
+echo -en "Replication is healthy.\r\n"
+sleep 0.1
+exit 0
+
+
