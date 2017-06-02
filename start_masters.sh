@@ -34,7 +34,7 @@ for ((i=1;i<=$dc_count;i++)) do
     fi
   done
 
-  docker service create --network percona-net --network percona-dc${i} --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
+  docker service create --network percona-net --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
 -e "SERVICE_PORTS=3306" \
 -e "TCP_PORTS=3306" \
 -e "BALANCE=source" \
@@ -46,6 +46,22 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "XTRABACKUP_USE_MEMORY=128M" \
 -e "GMCAST_SEGMENT=${i}" \
 -e "NETMASK=${net_mask}" \
+-e "INTROSPECT_PORT=3306" \
+-e "INTROSPECT_PROTOCOL=mysql" \
+-e "1INTROSPECT_STATUS=wsrep_cluster_status" \
+-e "2INTROSPECT_STATUS_LONG=wsrep_cluster_size" \
+-e "3INTROSPECT_STATUS_LONG=wsrep_local_state" \
+-e "4INTROSPECT_STATUS_LONG=wsrep_local_recv_queue" \
+-e "5INTROSPECT_STATUS_LONG=wsrep_local_send_queue" \
+-e "6INTROSPECT_STATUS_DELTA_LONG=wsrep_received_bytes" \
+-e "7INTROSPECT_STATUS_DELTA_LONG=wsrep_replicated_bytes" \
+-e "8INTROSPECT_STATUS_DELTA_LONG=wsrep_flow_control_recv" \
+-e "9INTROSPECT_STATUS_DELTA_LONG=wsrep_flow_control_sent" \
+-e "10INTROSPECT_STATUS_DELTA_LONG=wsrep_flow_control_paused_ns" \
+-e "11INTROSPECT_STATUS_DELTA_LONG=wsrep_local_commits" \
+-e "12INTROSPECT_STATUS_DELTA_LONG=wsrep_local_bf_aborts" \
+-e "13INTROSPECT_STATUS_DELTA_LONG=wsrep_local_cert_failures" \
+-e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
 imagenarium/percona-master:${image_version} --wsrep_slave_threads=2
 
   echo "Success, Waiting 45s..."
