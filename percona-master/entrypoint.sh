@@ -86,9 +86,9 @@ mysqld \
 --wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" \
 --wsrep_log_conflicts=ON \
 \
---query-cache-type=0
+--query-cache-type=0 \
 \
---innodb-flush-log-at-trx-commit=0
+--innodb-flush-log-at-trx-commit=0 \
 \
 --server-id=$server_id \
 --gtid-mode=ON \
