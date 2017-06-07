@@ -1,1 +1,0 @@
-﻿docker service create --name 🛋️mycouch couchdb

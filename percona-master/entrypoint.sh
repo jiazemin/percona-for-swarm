@@ -69,7 +69,7 @@ if [ -f "$DATADIR/grastate.dat" ]; then
     else
       start_pos="$(echo $recovered_pos | sed 's/.*WSREP\:\ Recovered\ position://' | sed 's/^[ \t]*//')"
       echo "WSREP: Recovered position $start_pos"
-      $CMDARG=$CMDARG "--wsrep_start_position=$start_pos"
+      CMDARG=$CMDARG" --wsrep_start_position=$start_pos"
     fi
   fi
 fi

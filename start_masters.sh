@@ -3,7 +3,7 @@ set -e
 
 dc_count=$1
 constr=$2
-image_version=5.7.16.1
+image_version=5.7.16.2
 net_mask=100.0.0
 
 docker network create --driver overlay --attachable --subnet=${net_mask}.0/24 percona-net

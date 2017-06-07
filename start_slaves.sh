@@ -3,7 +3,7 @@ set -e
 
 dc_count=$1
 constr=$2
-image_version=5.7.16.1
+image_version=5.7.16.2
 
 for ((i=1;i<=$dc_count;i++)) do 
   echo "Starting slaves in dc${i} with constraint: ${constr:-dc1}..."
