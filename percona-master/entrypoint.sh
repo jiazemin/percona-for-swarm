@@ -46,13 +46,17 @@ mysqld \
 --user=mysql \
 --port=${MYSQL_PORT} \
 \
---wsrep_provider_options="gmcast.segment=$GMCAST_SEGMENT; evs.send_window=512; evs.user_send_window=512; cert.log_conflicts=YES;" \
+--wsrep_provider_options="gmcast.segment=$GMCAST_SEGMENT; evs.send_window=512; evs.user_send_window=512; cert.log_conflicts=YES; gcache.size=2G; gcs.fc_limit=500; gcs.max_packet_size=1048576;" \
 --wsrep_cluster_name=$CLUSTER_NAME \
 --wsrep_cluster_address="gcomm://$CLUSTER_JOIN" \
 --wsrep_node_address="$ipaddr" \
 --wsrep_sst_method=xtrabackup-v2 \
 --wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" \
 --wsrep_log_conflicts=ON \
+\
+--query-cache-type=0
+\
+--innodb-flush-log-at-trx-commit=0
 \
 --server-id=$server_id \
 --gtid-mode=ON \

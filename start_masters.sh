@@ -35,6 +35,8 @@ for ((i=1;i<=$dc_count;i++)) do
   done
 
   docker service create --network percona-net --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
+--mount "type=volume,source=percona_master_data_volume${i},target=/var/lib/mysql" \
+--mount "type=volume,source=percona_master_log_volume${i},target=/var/log/mysql" \
 -e "SERVICE_PORTS=3306" \
 -e "TCP_PORTS=3306" \
 -e "BALANCE=source" \

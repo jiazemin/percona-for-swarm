@@ -32,6 +32,9 @@ mysqld \
 --slave-parallel-workers=8 \
 --slave-parallel-type=LOGICAL_CLOCK \
 \
+--query-cache-type=0
+--innodb-flush-log-at-trx-commit=0
+\
 --log-output=file \
 --slow-query-log=ON \
 --long-query-time=0 \
