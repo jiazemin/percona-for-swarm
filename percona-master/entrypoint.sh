@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+DATADIR="$("mysqld" --verbose --wsrep_provider= --help 2>/dev/null | awk '$1 == "datadir" { print $2; exit }')"
+
 # if command starts with an option, prepend mysqld
 if [ "${1:0:1}" = '-' ]; then
   CMDARG="$@"
@@ -40,6 +42,36 @@ fi
 
 if [ -z "$GMCAST_SEGMENT" ]; then
   GMCAST_SEGMENT=0
+fi
+#=====================================================================================
+
+if [ -f "$DATADIR/grastate.dat" ]; then
+  echo "Starting WSREP recovery process..."
+
+  log_file=$(mktemp /tmp/wsrep_recovery.XXXXXX)
+
+  eval mysqld --user=mysql --wsrep_recover 2> "$log_file"
+
+  ret=$?
+
+  if [ $ret -ne 0 ]; then
+    echo "WSREP: Failed to start mysqld for wsrep recovery: '`cat $log_file`'"
+  else
+    recovered_pos="$(grep 'WSREP: Recovered position:' $log_file)"
+
+    if [ -z "$recovered_pos" ]; then
+      skipped="$(grep WSREP $log_file | grep 'skipping position recovery')"
+      if [ -z "$skipped" ]; then
+        echo "WSREP: Failed to recover position: '`cat $log_file`'"
+      else
+        echo "WSREP: Position recovery skipped."
+      fi
+    else
+      start_pos="$(echo $recovered_pos | sed 's/.*WSREP\:\ Recovered\ position://' | sed 's/^[ \t]*//')"
+      echo "WSREP: Recovered position $start_pos"
+      $CMDARG=$CMDARG "--wsrep_start_position=$start_pos"
+    fi
+  fi
 fi
 
 mysqld \
