@@ -17,6 +17,19 @@ fi
 # the data will be copied from another node
 if [ -z "$CLUSTER_JOIN" ]; then
   ./init_datadir.sh
+else
+  IFS=',' read -ra nodeArray <<< "$CLUSTER_JOIN"
+
+  echo "Detected percona init node: "${nodeArray[0]}
+
+  mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${nodeArray[0]} -P ${port} )
+
+  #if percona_init is running then delete old data and logs from named values
+  if echo 'SELECT 1' | "${mysql[@]}" ; then 
+    echo "Delete old data and logs"
+    rm -rf ${DATADIR}/*
+    rm -rf /var/log/mysql/*
+  fi
 fi
 
 #Add some options to xtrabackup=======================================================
