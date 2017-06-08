@@ -22,7 +22,7 @@ else
 
   echo "Detected percona init node: "${nodeArray[0]}
 
-  mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${nodeArray[0]} -P ${port} )
+  mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${nodeArray[0]} -P ${MYSQL_PORT} )
 
   #if percona_init is running then delete old data and logs from named values
   if echo 'SELECT 1' | "${mysql[@]}" ; then 
