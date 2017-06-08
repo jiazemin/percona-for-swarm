@@ -13,6 +13,14 @@ if [ -z "$CLUSTER_NAME" ]; then
   exit 1
 fi
 
+if [ -z "$MYSQL_PORT" ]; then
+  MYSQL_PORT=3306
+fi
+
+if [ -z "$GMCAST_SEGMENT" ]; then
+  GMCAST_SEGMENT=0
+fi
+
 # if we have CLUSTER_JOIN - then we do not need to perform datadir initialize
 # the data will be copied from another node
 if [ -z "$CLUSTER_JOIN" ]; then
@@ -47,15 +55,6 @@ else
 fi
 
 server_id=$(echo $ipaddr | tr . '\n' | awk '{s = s*256 + $1} END {print s}')
-#=====================================================================================
-
-if [ -z "$MYSQL_PORT" ]; then
-  MYSQL_PORT=3306
-fi
-
-if [ -z "$GMCAST_SEGMENT" ]; then
-  GMCAST_SEGMENT=0
-fi
 #=====================================================================================
 
 if [ -f "$DATADIR/grastate.dat" ]; then
