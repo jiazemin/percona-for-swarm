@@ -10,8 +10,7 @@ ERR_FILE="${1:-/dev/null}"
 status=$($MYSQL_CMDLINE -e "SHOW SLAVE STATUS\G" 2>${ERR_FILE})
 
 if ! echo "$status" | grep -qs "Slave_IO_Running: Yes"    ||
-   ! echo "$status" | grep -qs "Slave_SQL_Running: Yes"   ||
-   ! echo "$status" | grep -qs "Seconds_Behind_Master: 0" ; then
+   ! echo "$status" | grep -qs "Slave_SQL_Running: Yes" ; then
   echo -en "HTTP/1.1 503 Service Unavailable\r\n"
   echo -en "Content-Type: text/plain\r\n"
   echo -en "Connection: close\r\n"

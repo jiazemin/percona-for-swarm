@@ -13,15 +13,15 @@ for ((i=1;i<=$dc_count;i++)) do
 done
 
 echo "Starting percona_init with constraint: ${constr:-dc1}..."
-docker service create --network percona-net --name percona_init --constraint "node.labels.dc == ${constr:-dc1}" \
+docker service create --detach=false --network percona-net --name percona_init --constraint "node.labels.dc == ${constr:-dc1}" \
 -e "CLUSTER_NAME=mycluster" \
 -e "MYSQL_ROOT_PASSWORD=PassWord123" \
 -e "GMCAST_SEGMENT=1" \
 -e "NETMASK=${net_mask}" \
 imagenarium/percona-master:${image_version}
 
-echo "Success, Waiting 45s..."
-sleep 45
+echo "Success, Waiting 30s..."
+sleep 30
 
 for ((i=1;i<=$dc_count;i++)) do
   echo "Starting percona in dc${i} with constraint: ${constr:-dc${i}}..."
@@ -34,7 +34,7 @@ for ((i=1;i<=$dc_count;i++)) do
     fi
   done
 
-  docker service create --network percona-net --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=false --network percona-net --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
 --mount "type=volume,source=percona_master_data_volume${i},target=/var/lib/mysql" \
 --mount "type=volume,source=percona_master_log_volume${i},target=/var/log/mysql" \
 -e "SERVICE_PORTS=3306" \
@@ -66,8 +66,8 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
 imagenarium/percona-master:${image_version} --wsrep_slave_threads=2
 
-  echo "Success, Waiting 45s..."
-  sleep 45
+  echo "Success, Waiting 30s..."
+  sleep 30
 
   nodes=""  
 
