@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-DATADIR="$("mysqld" --verbose --wsrep_provider= --help 2>/dev/null | awk '$1 == "datadir" { print $2; exit }')"
+DATADIR=/var/lib/mysql
 
 # if command starts with an option, prepend mysqld
 if [ "${1:0:1}" = '-' ]; then
@@ -21,10 +21,22 @@ if [ -z "$GMCAST_SEGMENT" ]; then
   GMCAST_SEGMENT=0
 fi
 
+if [ -z "$XTRABACKUP_USE_MEMORY" ]; then
+  XTRABACKUP_USE_MEMORY=128M
+fi
+
 # if we have CLUSTER_JOIN - then we do not need to perform datadir initialize
 # the data will be copied from another node
 if [ -z "$CLUSTER_JOIN" ]; then
-  ./init_datadir.sh
+  #If Init node first run
+  if [ ! -e "$DATADIR/mysql" ]; then
+    #Add some options to xtrabackup====================================================
+    echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
+
+    if [ -z "$SKIP_INIT" ]; then
+      ./init_datadir.sh  
+    fi
+  fi
 else
   IFS=',' read -ra nodeArray <<< "$CLUSTER_JOIN"
 
@@ -32,20 +44,17 @@ else
 
   mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${nodeArray[0]} -P ${MYSQL_PORT} )
 
-  #if percona_init is running then delete old data and logs from named values
+  #if first run(because percona_init is running) then: 
   if echo 'SELECT 1' | "${mysql[@]}" ; then 
+    #Delete old data and logs from named values========================================
     echo "Delete old data and logs"
     rm -rf ${DATADIR}/*
     rm -rf /var/log/mysql/*
+
+    #Add some options to xtrabackup====================================================
+    echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
   fi
 fi
-
-#Add some options to xtrabackup=======================================================
-if [ -z "$XTRABACKUP_USE_MEMORY" ]; then
-  XTRABACKUP_USE_MEMORY=128M
-fi
-
-echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
 
 #Generate server_id===================================================================
 if [ -z "$NETMASK" ]; then
@@ -57,7 +66,7 @@ fi
 server_id=$(echo $ipaddr | tr . '\n' | awk '{s = s*256 + $1} END {print s}')
 #=====================================================================================
 
-if [ -f "$DATADIR/grastate.dat" ]; then
+if [[ -f "$DATADIR/grastate.dat" && ! -z "${CLUSTER_JOIN}" ]]; then
   echo "Starting WSREP recovery process..."
 
   log_file=$(mktemp /tmp/wsrep_recovery.XXXXXX)
@@ -126,6 +135,9 @@ $CMDARG &
 pid="$!"
 
 ./wait_mysql.sh $pid $MYSQL_PORT
+
+echo "Exec post_init script..."
+./post_init.sh
 
 #Start xinetd for HAProxy check status=================================
 /etc/init.d/xinetd start

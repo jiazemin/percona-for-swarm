@@ -1,12 +1,16 @@
 #!/bin/bash
 set -e
 
+DATADIR=/var/lib/mysql
+
 # if command starts with an option, prepend mysqld
 if [ "${1:0:1}" = '-' ]; then
   CMDARG="$@"
 fi
 
-./init_datadir.sh
+if [ ! -e "$DATADIR/mysql" ]; then
+  ./init_datadir.sh
+fi
 
 # get server_id from ip address
 ipaddr=$(hostname -i | awk ' { print $1 } ')
