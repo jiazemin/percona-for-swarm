@@ -11,18 +11,10 @@ RUN apt-get update \
 && apt-get clean \
 && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-COPY clustercheck /usr/bin/
-COPY entrypoint.sh /
-COPY common/init_datadir.sh /init_datadir.sh
-COPY common/copy_datadir.sh /copy_datadir.sh
-COPY common/wait_mysql.sh /wait_mysql.sh
-COPY common/post_init.sh /post_init.sh
-COPY mysql_init_snapshot/* /var/lib/mysql
+COPY data/ /
 
-RUN chmod +x /usr/bin/clustercheck
-RUN chmod +x /entrypoint.sh
-RUN chmod +x /init_datadir.sh
-RUN chmod +x /copy_datadir.sh
-RUN chmod +x /wait_mysql.sh
-RUN chmod +x /post_init.sh
-RUN chown -R mysql:mysql /var/lib/mysql
+RUN chmod +x /usr/bin/clustercheck \
+&& chmod +x /entrypoint.sh \
+&& chmod +x /init_datadir.sh \
+&& chmod +x /wait_mysql.sh \
+&& chmod +x /post_init.sh

@@ -29,13 +29,17 @@ fi
 # the data will be copied from another node
 if [ -z "$CLUSTER_JOIN" ]; then
   #If Init node first run
-  if [ ! -e "$DATADIR/mysql" ]; then
+  if [ ! -f "$DATADIR/initialized" ]; then
     #Add some options to xtrabackup====================================================
     echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
 
-    if [ -z "$SKIP_INIT" ]; then
+    if [[ -z "$SKIP_INIT" || "${SKIP_INIT}" == "false" ]]; then
       ./init_datadir.sh  
+    else
+      chown -R mysql:mysql /var/lib/mysql
     fi
+
+    touch $DATADIR/initialized
   fi
 else
   IFS=',' read -ra nodeArray <<< "$CLUSTER_JOIN"
