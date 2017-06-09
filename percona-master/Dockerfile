@@ -16,9 +16,11 @@ COPY entrypoint.sh /
 COPY common/init_datadir.sh /init_datadir.sh
 COPY common/wait_mysql.sh /wait_mysql.sh
 COPY common/post_init.sh /post_init.sh
+COPY mysql_init_snapshot/* /var/lib/mysql
 
 RUN chmod +x /usr/bin/clustercheck
 RUN chmod +x /entrypoint.sh
 RUN chmod +x /init_datadir.sh
 RUN chmod +x /wait_mysql.sh
 RUN chmod +x /post_init.sh
+RUN chown -R mysql:mysql /var/lib/mysql
