@@ -51,6 +51,9 @@ docker service create --detach=false --network percona-net --name percona_init -
 -e "NETMASK=${net_mask}" \
 imagenarium/percona-master:${image_version} --wsrep_node_name=percona_init
 
+echo "Success, Waiting 10s..."
+sleep 10
+
 for ((i=1;i<=$dc_count;i++)) do
   echo "Starting percona in dc${i} with constraint: ${constr:-dc${i}}..."
 
