@@ -6,7 +6,7 @@ port=$2
 
 echo "Started with PID $pid, waiting for starting..."
 
-mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h 127.0.0.1 -P ${port} )
+mysql=( mysql -P ${port} )
 
 while true; do
   if ! kill -0 $pid > /dev/null 2>&1; then

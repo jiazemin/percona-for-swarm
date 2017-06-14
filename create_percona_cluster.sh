@@ -3,7 +3,38 @@ set -e
 
 dc_count=$1
 constr=$2
-image_version=5.7.16.2
+
+if [ -z "$1" ]; then
+  echo ""
+  echo "ERROR: Param dc_count not specified"
+  echo ""
+  echo "Usage: create_percona_cluster.sh DC_COUNT [NODE_LABEL_FOR_SINGLE_NODE_MODE]"
+  echo "---------------------------------------------------------------------------"
+  echo "  DC_COUNT - count of datacenters with nodes labeled as dc1,dc2,dc3..."
+  echo ""
+  echo "  NODE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node"
+  echo ""
+  echo ""
+
+  exit 1
+fi
+
+echo ""
+echo ""
+echo " _____                                            _"
+echo "|_   _|                                          (_)"
+echo "  | | _ __ ___   __ _  __ _  ___ _ __   __ _ _ __ _ _   _ _ __ ___"
+echo "  | || '_ ` _ \ / _` |/ _` |/ _ \ '_ \ / _` | '__| | | | | '_ ` _ \ "
+echo " _| || | | | | | (_| | (_| |  __/ | | | (_| | |  | | |_| | | | | | |"
+echo " \___/_| |_| |_|\__,_|\__, |\___|_| |_|\__,_|_|  |_|\__,_|_| |_| |_|"
+echo "                       __/ |"
+echo "                      |___/"
+echo ""
+echo "| P | e | r | c | o | n | a |   | f | o | r |   | S | w | a | r | m |"
+echo ""
+echo ""
+
+image_version=5.7.16.7
 net_mask=100.0.0
 
 docker network create --driver overlay --attachable --subnet=${net_mask}.0/24 percona-net
@@ -14,14 +45,14 @@ done
 
 echo "Starting percona_init with constraint: ${constr:-dc1}..."
 docker service create --detach=false --network percona-net --name percona_init --constraint "node.labels.dc == ${constr:-dc1}" \
--e "CLUSTER_NAME=mycluster" \
 -e "MYSQL_ROOT_PASSWORD=PassWord123" \
 -e "GMCAST_SEGMENT=1" \
+-e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
 imagenarium/percona-master:${image_version}
 
-echo "Success, Waiting 60s..."
-sleep 60
+echo "Success, Waiting 20s..."
+sleep 20
 
 for ((i=1;i<=$dc_count;i++)) do
   echo "Starting percona in dc${i} with constraint: ${constr:-dc${i}}..."
@@ -42,7 +73,6 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "BALANCE=source" \
 -e "HEALTH_CHECK=check port 9200 inter 5000 rise 1 fall 2" \
 -e "OPTION=httpchk OPTIONS * HTTP/1.1\r\nHost:\ www" \
--e "CLUSTER_NAME=mycluster" \
 -e "MYSQL_ROOT_PASSWORD=PassWord123" \
 -e "CLUSTER_JOIN=${nodes}" \
 -e "XTRABACKUP_USE_MEMORY=128M" \

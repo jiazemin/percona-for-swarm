@@ -8,16 +8,34 @@ if [ "${1:0:1}" = '-' ]; then
   CMDARG="$@"
 fi
 
-if [ ! -e "$DATADIR/mysql" ]; then
-  ./init_datadir.sh
-fi
-
 # get server_id from ip address
 ipaddr=$(hostname -i | awk ' { print $1 } ')
 server_id=$(echo $ipaddr | tr . '\n' | awk '{s = s*256 + $1} END {print s}')
 
 if [ -z "$MYSQL_PORT" ]; then
   MYSQL_PORT=3306
+fi
+
+if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+  echo >&2 '  You need to specify MYSQL_ROOT_PASSWORD '
+  exit 1
+fi
+
+if [ -z "$MYSQL_MASTER_ROOT_PASSWORD" ]; then
+  MYSQL_MASTER_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD"
+fi
+
+if [ -z "$MYSQL_MASTER_HOST" ]; then
+  echo >&2 '  You need to specify MYSQL_MASTER_HOST '
+  exit 1
+fi
+
+if [ -z "$MYSQL_MASTER_PORT" ]; then
+  MYSQL_MASTER_PORT=3306
+fi
+
+if [ ! -e "$DATADIR/mysql" ]; then
+  ./init_datadir.sh
 fi
 
 mysqld \
@@ -65,7 +83,7 @@ WSREP_STATUS=$($MYSQL_MASTER_CMDLINE -e "SHOW STATUS LIKE 'wsrep_local_state';" 
 
 if [ "${WSREP_STATUS}" == "4" ]; then
   READ_ONLY=$($MYSQL_MASTER_CMDLINE -e "SHOW GLOBAL VARIABLES LIKE 'read_only';" 2>/dev/null | tail -1 2>>/dev/null)
-        
+
   if [ "${READ_ONLY}" == "ON" ]; then
     echo "Percona XtraDB Cluster Node is read-only"
     exit 1

@@ -9,8 +9,11 @@ if [ "${1:0:1}" = '-' ]; then
 fi
 
 if [ -z "$CLUSTER_NAME" ]; then
-  echo >&2 'Error:  You need to specify CLUSTER_NAME'
-  exit 1
+  CLUSTER_NAME=percona_cluster
+fi
+
+if [ -z "$PXC_STRICT_MODE" ]; then
+  PXC_STRICT_MODE=ENFORCING;
 fi
 
 if [ -z "$MYSQL_PORT" ]; then
@@ -23,6 +26,19 @@ fi
 
 if [ -z "$XTRABACKUP_USE_MEMORY" ]; then
   XTRABACKUP_USE_MEMORY=128M
+fi
+
+if [ -z "$NETMASK" ]; then
+  ipaddr=$(hostname -i | awk ' { print $1 } ')
+  server_id=1
+else
+  ipaddr=$(hostname -i |  tr ' ' '\n' | awk -vm=$NETMASK '$1 ~ m { print $1; exit }')
+  server_id=$(echo $ipaddr | tr . '\n' | awk '{s = s*256 + $1} END {print s}')
+fi
+
+if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+  echo >&2 '  You need to specify MYSQL_ROOT_PASSWORD '
+  exit 1
 fi
 
 # if we have CLUSTER_JOIN - then we do not need to perform datadir initialize
@@ -48,7 +64,7 @@ else
 
   mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${nodeArray[0]} -P ${MYSQL_PORT} )
 
-  #if first run(because percona_init is running) then: 
+  #if create new cluster (because percona_init is running) then: 
   if echo 'SELECT 1' | "${mysql[@]}" ; then 
     #Delete old data and logs from named values========================================
     echo "Delete old data and logs"
@@ -60,16 +76,7 @@ else
   fi
 fi
 
-#Generate server_id===================================================================
-if [ -z "$NETMASK" ]; then
-  ipaddr=$(hostname -i | awk ' { print $1 } ')
-else
-  ipaddr=$(hostname -i |  tr ' ' '\n' | awk -vm=$NETMASK '$1 ~ m { print $1; exit }')
-fi
-
-server_id=$(echo $ipaddr | tr . '\n' | awk '{s = s*256 + $1} END {print s}')
-#=====================================================================================
-
+#Trying to recover TransactionID for to enable IST
 if [[ -f "$DATADIR/grastate.dat" && ! -z "${CLUSTER_JOIN}" ]]; then
   echo "Starting WSREP recovery process..."
 
@@ -86,6 +93,7 @@ if [[ -f "$DATADIR/grastate.dat" && ! -z "${CLUSTER_JOIN}" ]]; then
 
     if [ -z "$recovered_pos" ]; then
       skipped="$(grep WSREP $log_file | grep 'skipping position recovery')"
+
       if [ -z "$skipped" ]; then
         echo "WSREP: Failed to recover position: '`cat $log_file`'"
       else
@@ -110,6 +118,7 @@ mysqld \
 --wsrep_sst_method=xtrabackup-v2 \
 --wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" \
 --wsrep_log_conflicts=ON \
+--pxc-strict-mode=${PXC_STRICT_MODE} \
 \
 --query-cache-type=0 \
 \
@@ -139,6 +148,21 @@ $CMDARG &
 pid="$!"
 
 ./wait_mysql.sh $pid $MYSQL_PORT
+
+#===================================================================================
+
+mysql=( mysql -P ${MYSQL_PORT} )
+
+if [ "$MYSQL_DATABASE" ]; then
+  echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` ;" | "${mysql[@]}"
+fi
+
+"${mysql[@]}" <<-EOSQL
+  ALTER USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+  FLUSH PRIVILEGES;
+EOSQL
+
+#====================================================================================
 
 echo "Exec post_init script..."
 ./post_init.sh
