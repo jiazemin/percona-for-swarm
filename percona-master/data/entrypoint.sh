@@ -3,6 +3,10 @@ set -e
 
 DATADIR=/var/lib/mysql
 
+if [ ! -d "$DATADIR" ]; then
+ mkdir -p "$DATADIR"
+fi
+
 # if command starts with an option, prepend mysqld
 if [ "${1:0:1}" = '-' ]; then
   CMDARG="$@"
@@ -50,9 +54,11 @@ if [ -z "$CLUSTER_JOIN" ]; then
     echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
 
     if [[ -z "$SKIP_INIT" || "${SKIP_INIT}" == "false" ]]; then
-      ./init_datadir.sh  
+      ./init_datadir.sh
     else
-      chown -R mysql:mysql /var/lib/mysql
+      echo "Restoring datadir from backup..."
+      cp -R /backup_datadir/* ${DATADIR}
+      chown -R mysql:mysql ${DATADIR}
     fi
 
     touch $DATADIR/initialized
@@ -70,6 +76,12 @@ else
     echo "Delete old data and logs"
     rm -rf ${DATADIR}/*
     rm -rf /var/log/mysql/*
+
+    echo "Restoring datadir from backup..."
+
+    #Restore initial data for IST instead SST (speed up node join from 30s to 5s) ====
+    cp -R /backup_datadir/* ${DATADIR}
+    chown -R mysql:mysql ${DATADIR}
 
     #Add some options to xtrabackup====================================================
     echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf

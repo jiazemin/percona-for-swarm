@@ -1,4 +1,4 @@
-image_version=5.7.16.7
+image_version=5.7.16.12
 
 docker build -t imagenarium/percona-master:${image_version} -t imagenarium/percona-master:latest .
 docker push imagenarium/percona-master:${image_version}
