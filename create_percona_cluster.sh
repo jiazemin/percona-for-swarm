@@ -3,6 +3,9 @@ set -e
 
 dc_count=$1
 constr=$2
+image_version=5.7.16.12
+haproxy_version=1.6.7
+net_mask=100.0
 
 if [ -z "$1" ]; then
   echo ""
@@ -15,7 +18,6 @@ if [ -z "$1" ]; then
   echo "  NODE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node"
   echo ""
   echo ""
-
   exit 1
 fi
 
@@ -34,28 +36,25 @@ echo "| P | e | r | c | o | n | a |   | f | o | r |   | S | w | a | r | m |"
 echo ""
 echo ""
 
-image_version=5.7.16.12
-net_mask=100.0.0
-
+echo "Creating a cross datacenter percona network: [percona-net]"
 docker network create --driver overlay --attachable --subnet=${net_mask}.0/24 percona-net
 
-for ((i=1;i<=$dc_count;i++)) do
-  docker network create --driver overlay --attachable --subnet=100.${i}.0.0/24 percona-dc${i}
-done
-
-echo "Starting percona_init with constraint: ${constr:-dc1}..."
+echo "Starting percona init service with constraint: ${constr:-dc1}..."
 docker service create --detach=false --network percona-net --name percona_init --constraint "node.labels.dc == ${constr:-dc1}" \
 -e "MYSQL_ROOT_PASSWORD=PassWord123" \
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
-imagenarium/percona-master:${image_version} --wsrep_node_name=percona_init
+imagenarium/percona-master:${image_version} --wsrep_node_name=percona_init #set node name for sst donor search feature
 
 echo "Success, Waiting 10s..."
 sleep 10
 
 for ((i=1;i<=$dc_count;i++)) do
-  echo "Starting percona in dc${i} with constraint: ${constr:-dc${i}}..."
+  echo "Creating a local datacenter percona network: [percona-dc${i}]"
+  docker network create --driver overlay --attachable --subnet=${net_mask}.${i}.0/24 percona-dc${i}
+
+  echo "Starting percona service with constraint: ${constr:-dc${i}}..."
 
   nodes="percona_init"
 
@@ -94,21 +93,20 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "12INTROSPECT_STATUS_DELTA_LONG=wsrep_local_bf_aborts" \
 -e "13INTROSPECT_STATUS_DELTA_LONG=wsrep_local_cert_failures" \
 -e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
-imagenarium/percona-master:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,
-
+imagenarium/percona-master:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,#set init node as donor for activate IST instead SST when the cluster starts
   echo "Success, Waiting 20s..."
   sleep 20
 
   nodes=""  
 
-  echo "Starting haproxy in dc${i} with constraint: ${constr:-dc${i}}..."
+  echo "Starting haproxy with constraint: ${constr:-dc${i}}..."
 
   docker service create --detach=false --network percona-dc${i} --name percona_proxy_dc${i} --mount target=/var/run/docker.sock,source=/var/run/docker.sock,type=bind --constraint "node.labels.dc == ${constr:-dc${i}}" \
 -e "EXTRA_GLOBAL_SETTINGS=stats socket 0.0.0.0:14567" \
-dockercloud/haproxy
+dockercloud/haproxy:${haproxy_version}
 
 done
 
-echo "Removing percona_init..."
+echo "Removing percona init service..."
 docker service rm percona_init
 echo "Success"
