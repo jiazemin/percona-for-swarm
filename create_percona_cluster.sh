@@ -2,19 +2,24 @@
 set -e
 
 dc_count=$1
-constr=$2
+timing=$2
+constr=$3
 image_version=5.7.16.12
 haproxy_version=1.6.7
-net_mask=100.0
+net_mask=100.0.0
+
+if [-z "$2" ]; then
+  timing=20
+fi
 
 if [ -z "$1" ]; then
   echo ""
   echo "ERROR: Param dc_count not specified"
   echo ""
-  echo "Usage: create_percona_cluster.sh DC_COUNT [NODE_LABEL_FOR_SINGLE_NODE_MODE]"
+  echo "Usage: create_percona_cluster.sh DC_COUNT [TIMING] [NODE_LABEL_FOR_SINGLE_NODE_MODE]"
   echo "---------------------------------------------------------------------------"
   echo "  DC_COUNT - count of datacenters with nodes labeled as dc1,dc2,dc3..."
-  echo ""
+  echo "  TIMING - service start interval (default 20s)"
   echo "  NODE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node"
   echo ""
   echo ""
@@ -45,14 +50,12 @@ docker service create --detach=false --network percona-net --name percona_init -
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
-imagenarium/percona-master:${image_version} --wsrep_node_name=percona_init #set node name for sst donor search feature
-
-echo "Success, Waiting 10s..."
-sleep 10
+imagenarium/percona-master:${image_version} --wsrep_node_name=percona_init 
+#set node name "percona_init" for sst donor search feature
 
 for ((i=1;i<=$dc_count;i++)) do
   echo "Creating a local datacenter percona network: [percona-dc${i}]"
-  docker network create --driver overlay --attachable --subnet=${net_mask}.${i}.0/24 percona-dc${i}
+  docker network create --driver overlay --attachable --subnet=100.${i}.0.0/24 percona-dc${i}
 
   echo "Starting percona service with constraint: ${constr:-dc${i}}..."
 
@@ -93,9 +96,11 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "12INTROSPECT_STATUS_DELTA_LONG=wsrep_local_bf_aborts" \
 -e "13INTROSPECT_STATUS_DELTA_LONG=wsrep_local_cert_failures" \
 -e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
-imagenarium/percona-master:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,#set init node as donor for activate IST instead SST when the cluster starts
-  echo "Success, Waiting 20s..."
-  sleep 20
+imagenarium/percona-master:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,
+#set init node as donor for activate IST instead SST when the cluster starts
+
+  echo "Success, Waiting ${timing}s..."
+  sleep ${timing}
 
   nodes=""  
 
