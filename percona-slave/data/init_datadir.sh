@@ -3,8 +3,6 @@ set -e
 
 DATADIR=/var/lib/mysql
 
-rm -rf ${DATADIR}/*
-
 mysqld --user=mysql --initialize-insecure
 mysqld --user=mysql --skip-networking &
 pid="$!"

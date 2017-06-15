@@ -3,12 +3,25 @@ set -e
 
 dc_count=$1
 constr=$2
-image_version=5.7.16.3
+image_version=5.7.16.6
+
+if [ -z "$1" ]; then
+  echo ""
+  echo "ERROR: Param dc_count not specified"
+  echo ""
+  echo "Usage: start_slaves.sh DC_COUNT [NODE_LABEL_FOR_SINGLE_NODE_MODE]"
+  echo "---------------------------------------------------------------------------"
+  echo "  DC_COUNT - count of datacenters with nodes labeled as dc1,dc2,dc3..."
+  echo "  NODE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node"
+  echo ""
+  echo ""
+  exit 1
+fi
 
 for ((i=1;i<=$dc_count;i++)) do 
-  echo "Starting slaves in dc${i} with constraint: ${constr:-dc1}..."
+  echo "Starting percona slave service with constraint: ${constr:-dc${i}}..."
 
-  docker service create --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name=percona_slave_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=true --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name=percona_slave_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
 -e "MYSQL_PORT=3307" \
 -e "SERVICE_PORTS=3307" \
 -e "TCP_PORTS=3307" \

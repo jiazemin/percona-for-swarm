@@ -3,10 +3,6 @@ set -e
 
 DATADIR=/var/lib/mysql
 
-if [ ! -d "$DATADIR" ]; then
- mkdir -p "$DATADIR"
-fi
-
 # if command starts with an option, prepend mysqld
 if [ "${1:0:1}" = '-' ]; then
   CMDARG="$@"
@@ -49,7 +45,7 @@ fi
 # the data will be copied from another node
 if [ -z "$CLUSTER_JOIN" ]; then
   #If Init node first run
-  if [ ! -f "$DATADIR/initialized" ]; then
+  if [ ! -e "$DATADIR/mysql" ]; then
     #Add some options to xtrabackup====================================================
     echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
 
@@ -60,8 +56,6 @@ if [ -z "$CLUSTER_JOIN" ]; then
       cp -R /backup_datadir/* ${DATADIR}
       chown -R mysql:mysql ${DATADIR}
     fi
-
-    touch $DATADIR/initialized
   fi
 else
   IFS=',' read -ra nodeArray <<< "$CLUSTER_JOIN"

@@ -25,13 +25,13 @@ if [ -z "$MYSQL_MASTER_ROOT_PASSWORD" ]; then
   MYSQL_MASTER_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD"
 fi
 
-if [ -z "$MYSQL_MASTER_HOST" ]; then
-  echo >&2 '  You need to specify MYSQL_MASTER_HOST '
+if [ -z "$MASTER_HOST" ]; then
+  echo >&2 '  You need to specify MASTER_HOST '
   exit 1
 fi
 
-if [ -z "$MYSQL_MASTER_PORT" ]; then
-  MYSQL_MASTER_PORT=3306
+if [ -z "$MASTER_PORT" ]; then
+  MASTER_PORT=3306
 fi
 
 if [ ! -e "$DATADIR/mysql" ]; then
@@ -54,8 +54,8 @@ mysqld \
 --slave-parallel-workers=8 \
 --slave-parallel-type=LOGICAL_CLOCK \
 \
---query-cache-type=0
---innodb-flush-log-at-trx-commit=0
+--query-cache-type=0 \
+--innodb-flush-log-at-trx-commit=0 \
 \
 --log-output=file \
 --slow-query-log=ON \

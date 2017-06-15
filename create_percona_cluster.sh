@@ -4,7 +4,7 @@ set -e
 dc_count=$1
 timing=$2
 constr=$3
-image_version=5.7.16.12
+image_version=5.7.16.13
 haproxy_version=1.6.7
 net_mask=100.0.0
 
