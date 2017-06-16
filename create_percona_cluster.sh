@@ -4,7 +4,8 @@ set -e
 dc_count=$1
 timing=$2
 constr=$3
-image_version=5.7.16.13
+image_name=imagenarium/percona-master
+image_version=5.7.16.14
 haproxy_version=1.6.7
 net_mask=100.0.0
 
@@ -50,8 +51,11 @@ docker service create --detach=false --network percona-net --name percona_init -
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
-imagenarium/percona-master:${image_version} --wsrep_node_name=percona_init 
+${image_name}:${image_version} --wsrep_node_name=percona_init 
 #set node name "percona_init" for sst donor search feature
+
+echo "Success, Waiting ${timing}s..."
+sleep ${timing}
 
 for ((i=1;i<=$dc_count;i++)) do
   echo "Creating a local datacenter percona network: [percona-dc${i}]"
@@ -96,7 +100,7 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "12INTROSPECT_STATUS_DELTA_LONG=wsrep_local_bf_aborts" \
 -e "13INTROSPECT_STATUS_DELTA_LONG=wsrep_local_cert_failures" \
 -e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
-imagenarium/percona-master:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,
+${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,
 #set init node as donor for activate IST instead SST when the cluster starts
 
   echo "Success, Waiting ${timing}s..."

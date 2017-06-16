@@ -41,11 +41,15 @@ if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
   exit 1
 fi
 
+post_init=false
+
 # if we have CLUSTER_JOIN - then we do not need to perform datadir initialize
 # the data will be copied from another node
 if [ -z "$CLUSTER_JOIN" ]; then
   #If Init node first run
   if [ ! -e "$DATADIR/mysql" ]; then
+    post_init=true
+
     #Add some options to xtrabackup====================================================
     echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
 
@@ -170,8 +174,10 @@ EOSQL
 
 #====================================================================================
 
-echo "Exec post_init script..."
-./post_init.sh
+if [[ $post_init == true ]]; then
+  echo "Exec post_init script..."
+  ./post_init.sh
+fi
 
 #Start xinetd for HAProxy check status=================================
 /etc/init.d/xinetd start
