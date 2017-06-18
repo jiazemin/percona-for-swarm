@@ -33,7 +33,7 @@ if [[ -z "$SKIP_INIT" || "${SKIP_INIT}" == "false" ]]; then
     CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
     GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
     ALTER USER 'root'@'localhost' IDENTIFIED BY '';
-    CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '$XTRABACKUP_PASSWORD';
+    CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '${XTRABACKUP_PASSWORD}';
     GRANT RELOAD,PROCESS,LOCK TABLES,REPLICATION CLIENT ON *.* TO 'xtrabackup'@'localhost';
     DROP DATABASE IF EXISTS test ;
     FLUSH PRIVILEGES ;
