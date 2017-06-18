@@ -69,8 +69,14 @@ else
     rm -rf ${DATADIR}/*
     rm -rf /var/log/mysql/*
 
-    ./init_datadir.sh
+    #Not necessary, but speed up initial cluster start (activate IST instead SST)
+    if [ "${SKIP_INIT}" == "true" ]; then
+      echo "Restoring datadir from backup..."
+      cp -R /backup_datadir/* ${DATADIR}
+      chown -R mysql:mysql ${DATADIR}
+    fi
   else
+    #Maybe useful when wsrep_sst_method=mysqldump
     if [ ! -e "$DATADIR/mysql" ]; then
       ./init_datadir.sh
     fi
