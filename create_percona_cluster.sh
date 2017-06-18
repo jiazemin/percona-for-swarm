@@ -5,7 +5,7 @@ dc_count=$1
 timing=$2
 constr=$3
 image_name=imagenarium/percona-master
-image_version=5.7.16.14
+image_version=5.7.16.15
 haproxy_version=1.6.7
 net_mask=100.0.0
 
@@ -43,7 +43,14 @@ echo ""
 echo ""
 
 echo "Creating a cross datacenter percona network: [percona-net]"
+set +e
 docker network create --driver overlay --attachable --subnet=${net_mask}.0/24 percona-net
+set -e
+
+echo "Creating a cross datacenter monitoring network: [monitoring]"
+set +e
+docker network create --driver overlay --attachable --subnet=77.77.77.0/24 monitoring
+set -e
 
 echo "Starting percona init service with constraint: ${constr:-dc1}..."
 docker service create --detach=false --network percona-net --name percona_init --constraint "node.labels.dc == ${constr:-dc1}" \
@@ -51,7 +58,7 @@ docker service create --detach=false --network percona-net --name percona_init -
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
-${image_name}:${image_version} --wsrep_node_name=percona_init 
+${image_name}:${image_version} --wsrep-sst-method=mysqldump --wsrep-sst-auth=root:PassWord123 --wsrep_node_name=percona_init 
 #set node name "percona_init" for sst donor search feature
 
 echo "Success, Waiting ${timing}s..."
@@ -59,7 +66,9 @@ sleep ${timing}
 
 for ((i=1;i<=$dc_count;i++)) do
   echo "Creating a local datacenter percona network: [percona-dc${i}]"
+  set +e
   docker network create --driver overlay --attachable --subnet=100.${i}.0.0/24 percona-dc${i}
+  set -e
 
   echo "Starting percona service with constraint: ${constr:-dc${i}}..."
 
@@ -81,6 +90,7 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "OPTION=httpchk OPTIONS * HTTP/1.1\r\nHost:\ www" \
 -e "MYSQL_ROOT_PASSWORD=PassWord123" \
 -e "CLUSTER_JOIN=${nodes}" \
+-e "SKIP_INIT=true" \
 -e "XTRABACKUP_USE_MEMORY=128M" \
 -e "GMCAST_SEGMENT=${i}" \
 -e "NETMASK=${net_mask}" \
@@ -100,7 +110,7 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "12INTROSPECT_STATUS_DELTA_LONG=wsrep_local_bf_aborts" \
 -e "13INTROSPECT_STATUS_DELTA_LONG=wsrep_local_cert_failures" \
 -e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
-${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,
+${image_name}:${image_version} --wsrep-sst-method=mysqldump --wsrep-sst-auth=root:PassWord123 --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,
 #set init node as donor for activate IST instead SST when the cluster starts
 
   echo "Success, Waiting ${timing}s..."

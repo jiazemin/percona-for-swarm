@@ -41,27 +41,21 @@ if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
   exit 1
 fi
 
-post_init=false
+init_node_first_run=false
 
-# if we have CLUSTER_JOIN - then we do not need to perform datadir initialize
-# the data will be copied from another node
 if [ -z "$CLUSTER_JOIN" ]; then
-  #If Init node first run
   if [ ! -e "$DATADIR/mysql" ]; then
-    post_init=true
+    init_node_first_run=true
+    ./init_datadir.sh
 
     #Add some options to xtrabackup====================================================
     echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
-
-    if [[ -z "$SKIP_INIT" || "${SKIP_INIT}" == "false" ]]; then
-      ./init_datadir.sh
-    else
-      echo "Restoring datadir from backup..."
-      cp -R /backup_datadir/* ${DATADIR}
-      chown -R mysql:mysql ${DATADIR}
-    fi
   fi
 else
+  #Here we will always have a new container because it running as a new task in service mode
+  #Add some options to xtrabackup====================================================
+  echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
+
   IFS=',' read -ra nodeArray <<< "$CLUSTER_JOIN"
 
   echo "Detected percona init node: "${nodeArray[0]}
@@ -75,44 +69,41 @@ else
     rm -rf ${DATADIR}/*
     rm -rf /var/log/mysql/*
 
-    echo "Restoring datadir from backup..."
-
-    #Restore initial data for IST instead SST (speed up node join from 30s to 5s) ====
-    cp -R /backup_datadir/* ${DATADIR}
-    chown -R mysql:mysql ${DATADIR}
-
-    #Add some options to xtrabackup====================================================
-    echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
-  fi
-fi
-
-#Trying to recover TransactionID for to enable IST
-if [[ -f "$DATADIR/grastate.dat" && ! -z "${CLUSTER_JOIN}" ]]; then
-  echo "Starting WSREP recovery process..."
-
-  log_file=$(mktemp /tmp/wsrep_recovery.XXXXXX)
-
-  eval mysqld --user=mysql --wsrep_recover 2> "$log_file"
-
-  ret=$?
-
-  if [ $ret -ne 0 ]; then
-    echo "WSREP: Failed to start mysqld for wsrep recovery: '`cat $log_file`'"
+    ./init_datadir.sh
   else
-    recovered_pos="$(grep 'WSREP: Recovered position:' $log_file)"
+    if [ ! -e "$DATADIR/mysql" ]; then
+      ./init_datadir.sh
+    fi
+  fi
 
-    if [ -z "$recovered_pos" ]; then
-      skipped="$(grep WSREP $log_file | grep 'skipping position recovery')"
+  #Trying to recover TransactionID for to enable IST
+  if [ -f "$DATADIR/grastate.dat" ]; then
+    echo "Starting WSREP recovery process..."
 
-      if [ -z "$skipped" ]; then
-        echo "WSREP: Failed to recover position: '`cat $log_file`'"
-      else
-        echo "WSREP: Position recovery skipped."
-      fi
+    log_file=$(mktemp /tmp/wsrep_recovery.XXXXXX)
+
+    eval mysqld --user=mysql --wsrep_recover 2> "$log_file"
+
+    ret=$?
+
+    if [ $ret -ne 0 ]; then
+      echo "WSREP: Failed to start mysqld for wsrep recovery: '`cat $log_file`'"
     else
-      start_pos="$(echo $recovered_pos | sed 's/.*WSREP\:\ Recovered\ position://' | sed 's/^[ \t]*//')"
-      echo "WSREP: Recovered position $start_pos"
-      CMDARG=$CMDARG" --wsrep_start_position=$start_pos"
+      recovered_pos="$(grep 'WSREP: Recovered position:' $log_file)"
+
+      if [ -z "$recovered_pos" ]; then
+        skipped="$(grep WSREP $log_file | grep 'skipping position recovery')"
+
+        if [ -z "$skipped" ]; then
+          echo "WSREP: Failed to recover position: '`cat $log_file`'"
+        else
+          echo "WSREP: Position recovery skipped."
+        fi
+      else
+        start_pos="$(echo $recovered_pos | sed 's/.*WSREP\:\ Recovered\ position://' | sed 's/^[ \t]*//')"
+        echo "WSREP: Recovered position $start_pos"
+        CMDARG=$CMDARG" --wsrep_start_position=$start_pos"
+      fi
     fi
   fi
 fi
@@ -159,22 +150,21 @@ pid="$!"
 
 ./wait_mysql.sh $pid $MYSQL_PORT
 
-#===================================================================================
-
+#=======================================================================
 mysql=( mysql -P ${MYSQL_PORT} )
 
-if [ "$MYSQL_DATABASE" ]; then
-  echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` ;" | "${mysql[@]}"
-fi
-
+#Change password if datadir was restored from binary data independent from init_node_first_run param, because init_node_first_run is taken only on init node
 "${mysql[@]}" <<-EOSQL
   ALTER USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
   FLUSH PRIVILEGES;
 EOSQL
 
-#====================================================================================
+#First run steps========================================================
+if [[ $init_node_first_run == true ]]; then
+  if [ "$MYSQL_DATABASE" ]; then
+    echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` ;" | "${mysql[@]}"
+  fi
 
-if [[ $post_init == true ]]; then
   echo "Exec post_init script..."
   ./post_init.sh
 fi
