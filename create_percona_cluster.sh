@@ -17,11 +17,11 @@ if [ -z "$1" ]; then
   echo ""
   echo "ERROR: Param dc_count not specified"
   echo ""
-  echo "Usage: create_percona_cluster.sh DC_COUNT [TIMING] [NODE_LABEL_FOR_SINGLE_NODE_MODE]"
+  echo "Usage: create_percona_cluster.sh DC_COUNT [TIMING] [ENGINE_LABEL_FOR_SINGLE_NODE_MODE]"
   echo "---------------------------------------------------------------------------"
-  echo "  DC_COUNT - count of datacenters with nodes labeled as dc1,dc2,dc3..."
+  echo "  DC_COUNT - count of datacenters with engines labeled as dc1,dc2,dc3..."
   echo "  TIMING - service start interval (default 20s)"
-  echo "  NODE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node"
+  echo "  ENGINE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node"
   echo ""
   echo ""
   exit 1
@@ -53,7 +53,7 @@ docker network create --driver overlay --attachable --subnet=77.77.77.0/24 monit
 set -e
 
 echo "Starting percona init service with constraint: ${constr:-dc1}..."
-docker service create --detach=false --network percona-net --name percona_init --constraint "node.labels.dc == ${constr:-dc1}" \
+docker service create --detach=false --network percona-net --name percona_init --constraint "engine.labels.dc == ${constr:-dc1}" \
 -e "MYSQL_ROOT_PASSWORD=PassWord123" \
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
@@ -80,7 +80,7 @@ for ((i=1;i<=$dc_count;i++)) do
     fi
   done
 
-  docker service create --detach=false --network percona-net --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "node.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=false --network percona-net --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "engine.labels.dc == ${constr:-dc${i}}" \
 --mount "type=volume,source=percona_master_data_volume${i},target=/var/lib/mysql" \
 --mount "type=volume,source=percona_master_log_volume${i},target=/var/log/mysql" \
 -e "SERVICE_PORTS=3306" \
@@ -120,7 +120,7 @@ ${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona
 
   echo "Starting haproxy with constraint: ${constr:-dc${i}}..."
 
-  docker service create --detach=false --network percona-dc${i} --name percona_proxy_dc${i} --mount target=/var/run/docker.sock,source=/var/run/docker.sock,type=bind --constraint "node.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=false --network percona-dc${i} --name percona_proxy_dc${i} --mount target=/var/run/docker.sock,source=/var/run/docker.sock,type=bind --constraint "engine.labels.dc == ${constr:-dc${i}}" \
 -e "EXTRA_GLOBAL_SETTINGS=stats socket 0.0.0.0:14567" \
 dockercloud/haproxy:${haproxy_version}
 

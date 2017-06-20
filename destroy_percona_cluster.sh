@@ -9,7 +9,7 @@ if [ -z "$1" ]; then
   echo ""
   echo "Usage: create_percona_cluster.sh DC_COUNT"
   echo "---------------------------------------------------------------------------"
-  echo "  DC_COUNT - count of datacenters with nodes labeled as dc1,dc2,dc3..."
+  echo "  DC_COUNT - count of datacenters with engines labeled as dc1,dc2,dc3..."
   echo ""
   exit 1
 fi
