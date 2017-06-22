@@ -9,7 +9,7 @@ image_version=5.7.16.17
 haproxy_version=1.6.7
 net_mask=100.0.0
 
-if [-z "$2" ]; then
+if [ -z "$2" ]; then
   timing=20
 fi
 
@@ -42,14 +42,8 @@ echo "| P | e | r | c | o | n | a |   | f | o | r |   | S | w | a | r | m |"
 echo ""
 echo ""
 
-echo "Creating a cross datacenter percona network: [percona-net]"
 set +e
-docker network create --driver overlay --attachable --subnet=${net_mask}.0/24 percona-net
-set -e
-
-echo "Creating a cross datacenter monitoring network: [monitoring]"
-set +e
-docker network create --driver overlay --attachable --subnet=77.77.77.0/24 monitoring
+./create_networks.sh ${dc_count} ${net_mask}
 set -e
 
 echo "Starting percona init service with constraint: ${constr:-dc1}..."
@@ -58,18 +52,13 @@ docker service create --detach=false --network percona-net --name percona_init -
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
-${image_name}:${image_version} --wsrep_node_name=percona_init 
+${image_name}:${image_version} --wsrep_node_name=percona_init
 #set node name "percona_init" for sst donor search feature
 
 echo "Success, Waiting ${timing}s..."
 sleep ${timing}
 
 for ((i=1;i<=$dc_count;i++)) do
-  echo "Creating a local datacenter percona network: [percona-dc${i}]"
-  set +e
-  docker network create --driver overlay --attachable --subnet=100.${i}.0.0/24 percona-dc${i}
-  set -e
-
   echo "Starting percona service with constraint: ${constr:-dc${i}}..."
 
   nodes="percona_init"
