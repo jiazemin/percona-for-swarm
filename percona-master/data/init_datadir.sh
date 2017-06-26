@@ -3,32 +3,14 @@ set -e
 
 DATADIR=/var/lib/mysql
 
-if [[ -z "$SKIP_INIT" || "${SKIP_INIT}" == "false" ]]; then
+if [[ -z "${SKIP_INIT}" || "${SKIP_INIT}" == "false" ]]; then
   mysqld --user=mysql --initialize-insecure
   mysqld --user=mysql --skip-networking &
   pid="$!"
 
-  mysql=( mysql --protocol=socket -uroot )
+  ./wait_mysql.sh ${pid} 30
 
-  for i in {30..0}; do
-    if echo 'SELECT 1' | "${mysql[@]}" &> /dev/null; then
-      break
-    fi
-    echo 'MySQL init process in progress...'
-    sleep 1
-  done
-
-  if [ "$i" = 0 ]; then
-    echo >&2 'MySQL init process failed.'
-    exit 1
-  fi
-
-  # sed is for https://bugs.mysql.com/bug.php?id=20545
-  mysql_tzinfo_to_sql /usr/share/zoneinfo | sed 's/Local time zone must be set--see zic manual page/FCTY/' | "${mysql[@]}" mysql
-
-  "${mysql[@]}" <<-EOSQL
-    -- What's done in this file shouldn't be replicated
-    --  or products like mysql-fabric won't work
+  mysql <<-EOSQL
     SET @@SESSION.SQL_LOG_BIN=0;
     CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
     GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
@@ -40,7 +22,7 @@ if [[ -z "$SKIP_INIT" || "${SKIP_INIT}" == "false" ]]; then
 EOSQL
 
   if ! kill -s TERM "$pid" || ! wait "$pid"; then
-    echo >&2 'MySQL init process failed.'
+    echo >&2 "MySQL init process failed"
     exit 1
   fi
 else
@@ -49,4 +31,4 @@ else
   chown -R mysql:mysql ${DATADIR}
 fi
 
-echo 'MySQL init process done. Ready for start up.'
+echo "MySQL init process done. Ready for start up"

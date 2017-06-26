@@ -2,33 +2,28 @@
 set -e
 
 dc_count=$1
-timing=$2
-constr=$3
+constr=$2
 image_name=imagenarium/percona-master
-image_version=5.7.16.17
+image_version=5.7.16.20
 haproxy_version=1.6.7
 net_mask=100.0.0
-
-if [ -z "$2" ]; then
-  timing=20
-fi
+percona_service_name="percona_master_dc"
+global_percona_net="percona-net"
+dc_percona_net="percona-dc"
+root_password="PassWord123"
+init_node_name="percona_init"
+start_time=$(date +%s%3N)
 
 if [ -z "$1" ]; then
-  echo ""
-  echo "ERROR: Param dc_count not specified"
-  echo ""
-  echo "Usage: create_percona_cluster.sh DC_COUNT [TIMING] [ENGINE_LABEL_FOR_SINGLE_NODE_MODE]"
+  echo -e "\nERROR: Param dc_count not specified\n"
+  echo "Usage: create_percona_cluster.sh DC_COUNT [ENGINE_LABEL_FOR_SINGLE_NODE_MODE]"
   echo "---------------------------------------------------------------------------"
-  echo "  DC_COUNT - count of datacenters with engines labeled as dc1,dc2,dc3..."
-  echo "  TIMING - service start interval (default 20s)"
-  echo "  ENGINE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node"
-  echo ""
-  echo ""
+  echo "DC_COUNT - count of datacenters with engines labeled as dc1,dc2,dc3..."
+  echo -e "ENGINE_LABEL_FOR_SINGLE_NODE_MODE - specify this param only if you want to emulate multi-dc cluster on single node\n"
   exit 1
 fi
 
-echo ""
-echo ""
+echo -e "\n\n"
 echo " _____                                            _"
 echo "|_   _|                                          (_)"
 echo "  | | _ __ ___   __ _  __ _  ___ _ __   __ _ _ __ _ _   _ _ __ ___"
@@ -39,37 +34,45 @@ echo "                       __/ |"
 echo "                      |___/"
 echo ""
 echo "| P | e | r | c | o | n | a |   | f | o | r |   | S | w | a | r | m |"
-echo ""
-echo ""
+echo -e "\n\n"
 
+echo "Create networks..."
 set +e
-./create_networks.sh ${dc_count} ${net_mask}
+docker network create --driver overlay --attachable --subnet=100.100.100.0/24 monitoring
+docker network create --driver overlay --attachable --subnet=${net_mask}.0/24 ${global_percona_net}
+
+for ((i=1;i<=$dc_count;i++)) do
+  docker network create --driver overlay --attachable --subnet=100.${i}.0.0/24 ${dc_percona_net}${i}
+done
 set -e
 
 echo "Starting percona init service with constraint: ${constr:-dc1}..."
-docker service create --detach=false --network percona-net --name percona_init --constraint "engine.labels.dc == ${constr:-dc1}" \
--e "MYSQL_ROOT_PASSWORD=PassWord123" \
+docker service create --detach=true --network ${global_percona_net} --name ${init_node_name} --constraint "engine.labels.dc == ${constr:-dc1}" \
+-e "MYSQL_ROOT_PASSWORD=${root_password}" \
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
-${image_name}:${image_version} --wsrep_node_name=percona_init
-#set node name "percona_init" for sst donor search feature
+${image_name}:${image_version} --wsrep_node_name=${init_node_name}
+#set node name "init_node_name" for sst donor search feature
 
-echo "Success, Waiting ${timing}s..."
-sleep ${timing}
+docker run --rm -it --network ${global_percona_net} \
+-e "MYSQL_HOST=${init_node_name}" \
+-e "MYSQL_ROOT_PASSWORD=${root_password}" \
+--entrypoint /check_remote.sh \
+${image_name}:${image_version}
 
 for ((i=1;i<=$dc_count;i++)) do
-  echo "Starting percona service with constraint: ${constr:-dc${i}}..."
+  echo "Starting ${percona_service_name}${i} with constraint: ${constr:-dc${i}}..."
 
-  nodes="percona_init"
+  nodes="${init_node_name}"
 
   for ((j=1;j<=$dc_count;j++)) do
     if [[ $j != $i ]]; then
-      nodes=${nodes},percona_master_dc${j}
+      nodes=${nodes},${percona_service_name}${j}
     fi
   done
 
-  docker service create --detach=false --network percona-net --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name percona_master_dc${i} --constraint "engine.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=true --network ${global_percona_net} --network ${dc_percona_net}${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name ${percona_service_name}${i} --constraint "engine.labels.dc == ${constr:-dc${i}}" \
 --mount "type=volume,source=percona_master_data_volume${i},target=/var/lib/mysql" \
 --mount "type=volume,source=percona_master_log_volume${i},target=/var/log/mysql" \
 -e "SERVICE_PORTS=3306" \
@@ -77,7 +80,7 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "BALANCE=source" \
 -e "HEALTH_CHECK=check port 9200 inter 5000 rise 1 fall 2" \
 -e "OPTION=httpchk OPTIONS * HTTP/1.1\r\nHost:\ www" \
--e "MYSQL_ROOT_PASSWORD=PassWord123" \
+-e "MYSQL_ROOT_PASSWORD=${root_password}" \
 -e "CLUSTER_JOIN=${nodes}" \
 -e "SKIP_INIT=true" \
 -e "XTRABACKUP_USE_MEMORY=128M" \
@@ -99,22 +102,29 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "12INTROSPECT_STATUS_DELTA_LONG=wsrep_local_bf_aborts" \
 -e "13INTROSPECT_STATUS_DELTA_LONG=wsrep_local_cert_failures" \
 -e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
-${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=percona_init,
+${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=${init_node_name},
 #set init node as donor for activate IST instead SST when the cluster starts
 
-  echo "Success, Waiting ${timing}s..."
-  sleep ${timing}
+  docker run --rm -it --network ${global_percona_net} \
+-e "MYSQL_HOST=${percona_service_name}${i}" \
+-e "MYSQL_ROOT_PASSWORD=${root_password}" \
+--entrypoint /check_remote.sh \
+${image_name}:${image_version}
 
   nodes=""  
 
-  echo "Starting haproxy with constraint: ${constr:-dc${i}}..."
+  echo "Starting percona_proxy_dc${i} with constraint: ${constr:-dc${i}}..."
 
-  docker service create --detach=false --network percona-dc${i} --name percona_proxy_dc${i} --mount target=/var/run/docker.sock,source=/var/run/docker.sock,type=bind --constraint "engine.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=true --network ${dc_percona_net}${i} --name percona_proxy_dc${i} --mount target=/var/run/docker.sock,source=/var/run/docker.sock,type=bind --constraint "engine.labels.dc == ${constr:-dc${i}}" \
 -e "EXTRA_GLOBAL_SETTINGS=stats socket 0.0.0.0:14567" \
 dockercloud/haproxy:${haproxy_version}
 
 done
 
 echo "Removing percona init service..."
-docker service rm percona_init
-echo "Success"
+docker service rm ${init_node_name}
+
+end_time=$(date +%s%3N)
+elapsed_time=$(expr $end_time - $start_time)
+
+echo "Success. Total time: ${elapsed_time}ms"
