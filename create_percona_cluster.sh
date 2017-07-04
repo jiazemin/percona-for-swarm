@@ -4,7 +4,7 @@ set -e
 dc_count=$1
 constr=$2
 image_name=imagenarium/percona-master
-image_version=5.7.16.20
+image_version=5.7.16.22
 haproxy_version=1.6.7
 net_mask=100.0.0
 percona_service_name="percona_master_dc"
@@ -52,6 +52,7 @@ docker service create --detach=true --network ${global_percona_net} --name ${ini
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
+-e "logdog=true" \
 ${image_name}:${image_version} --wsrep_node_name=${init_node_name}
 #set node name "init_node_name" for sst donor search feature
 
@@ -86,6 +87,7 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "XTRABACKUP_USE_MEMORY=128M" \
 -e "GMCAST_SEGMENT=${i}" \
 -e "NETMASK=${net_mask}" \
+-e "logdog=true" \
 -e "INTROSPECT_PORT=3306" \
 -e "INTROSPECT_PROTOCOL=mysql" \
 -e "1INTROSPECT_STATUS=wsrep_cluster_status" \

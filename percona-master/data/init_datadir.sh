@@ -3,7 +3,10 @@ set -e
 
 DATADIR=/var/lib/mysql
 
+echo "[IMAGENARIUM]: Preparing data dir for first start..."
+
 if [[ -z "${SKIP_INIT}" || "${SKIP_INIT}" == "false" ]]; then
+  echo "[IMAGENARIUM]: Run full cycle data dir initialization..."
   mysqld --user=mysql --initialize-insecure
   mysqld --user=mysql --skip-networking &
   pid="$!"
@@ -22,13 +25,13 @@ if [[ -z "${SKIP_INIT}" || "${SKIP_INIT}" == "false" ]]; then
 EOSQL
 
   if ! kill -s TERM "$pid" || ! wait "$pid"; then
-    echo >&2 "MySQL init process failed"
+    echo >&2 "[IMAGENARIUM]: MySQL init process failed"
     exit 1
   fi
 else
-  echo "Restoring datadir from backup..."
+  echo "[IMAGENARIUM]: Restoring data dir from backup..."
   cp -R /backup_datadir/* ${DATADIR}
   chown -R mysql:mysql ${DATADIR}
 fi
 
-echo "MySQL init process done. Ready for start up"
+echo "[IMAGENARIUM]: MySQL init process done. Ready for start up"

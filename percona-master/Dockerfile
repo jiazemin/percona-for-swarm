@@ -15,6 +15,7 @@ COPY data/ /
 
 RUN chmod +x /usr/bin/clustercheck \
 && chmod +x /entrypoint.sh \
+&& chmod +x /atoi.sh \
 && chmod +x /init_datadir.sh \
 && chmod +x /wait_mysql.sh \
 && chmod +x /post_init.sh \

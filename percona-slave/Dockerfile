@@ -12,6 +12,7 @@ COPY data/ /
 
 RUN chmod +x /usr/bin/slavecheck \
 && chmod +x /entrypoint.sh \
+&& chmod +x /atoi.sh \
 && chmod +x /init_datadir.sh \
 && chmod +x /wait_mysql.sh
 

@@ -8,42 +8,32 @@ if [ "${1:0:1}" = '-' ]; then
   CMDARG="$@"
 fi
 
-if [ -z "${CLUSTER_NAME}" ]; then
-  CLUSTER_NAME=percona_cluster
-fi
-
-if [ -z "${PXC_STRICT_MODE}" ]; then
-  PXC_STRICT_MODE=ENFORCING;
-fi
-
-if [ -z "${MYSQL_PORT}" ]; then
-  MYSQL_PORT=3306
-fi
-
-if [ -z "${GMCAST_SEGMENT}" ]; then
-  GMCAST_SEGMENT=0
-fi
-
-if [ -z "${XTRABACKUP_USE_MEMORY}" ]; then
-  XTRABACKUP_USE_MEMORY=128M
-fi
-
-if [ -z "${NETMASK}" ]; then
-  ipaddr=$(hostname -i | awk ' { print $1 } ')
-  server_id=1
-else
-  ipaddr=$(hostname -i |  tr ' ' '\n' | awk -vm=$NETMASK '$1 ~ m { print $1; exit }')
-  server_id=$(echo $ipaddr | tr . '\n' | awk '{s = s*256 + $1} END {print s}')
-fi
-
 if [ -z "${MYSQL_ROOT_PASSWORD}" ]; then
-  echo >&2 "You need to specify MYSQL_ROOT_PASSWORD"
+  echo >&2 "[IMAGENARIUM]: You need to specify MYSQL_ROOT_PASSWORD"
   exit 1
 fi
+
+: ${CLUSTER_NAME="percona_cluster"}
+: ${PXC_STRICT_MODE="ENFORCING"}
+: ${MYSQL_PORT="3306"}
+: ${GMCAST_SEGMENT="0"}
+: ${XTRABACKUP_USE_MEMORY="128M"}
+
+if [ -z "${NETMASK}" ]; then
+  ipaddr=$(hostname -i | awk '{ print $1; exit }')
+else
+  ipaddr=$(hostname -i |  tr ' ' '\n' | awk -vm=$NETMASK '$1 ~ m { print $1; exit }')
+fi
+
+echo "[IMAGENARIUM]: Use WSREP node address:${ipaddr}"
+
+server_id=$(./atoi.sh $ipaddr)
 
 init_node_first_run=false
 
 if [ -z "${CLUSTER_JOIN}" ]; then
+  echo "[IMAGENARIUM]: Starting Percona init node..."
+
   if [ ! -e "${DATADIR}/mysql" ]; then
     init_node_first_run=true
     ./init_datadir.sh
@@ -58,33 +48,37 @@ else
 
   IFS=',' read -ra nodeArray <<< "${CLUSTER_JOIN}"
 
-  echo "Detected percona init node: "${nodeArray[0]}
+  echo "[IMAGENARIUM]: Try percona init node for donor: "${nodeArray[0]}
 
   mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${nodeArray[0]} -P ${MYSQL_PORT} )
 
   #if create new cluster (because percona_init is running) then: 
   if echo "SELECT 1" | "${mysql[@]}" &>/dev/null; then 
     #Delete old data and logs from named values========================================
-    echo "Delete old data and logs"
+    echo "[IMAGENARIUM]: Join to the new cluster. Use init node as donor: ${nodeArray[0]}. Delete old data and logs if exists"
     rm -rf ${DATADIR}/*
     rm -rf /var/log/mysql/*
 
     #Not necessary, but speed up initial cluster start (activate IST instead SST)
     if [ "${SKIP_INIT}" == "true" ]; then
-      echo "Restoring datadir from backup..."
+      echo "[IMAGENARIUM]: Restore datadir from backup..."
       cp -R /backup_datadir/* ${DATADIR}
       chown -R mysql:mysql ${DATADIR}
     fi
   else
+    echo "[IMAGENARIUM]: Join to the existing cluster"
     #Maybe useful when wsrep_sst_method=mysqldump
     if [ ! -e "${DATADIR}/mysql" ]; then
+      echo "[IMAGENARIUM]: Init data dir"
       ./init_datadir.sh
+    else
+      echo "[IMAGENARIUM]: Data dir already exists for this node"
     fi
   fi
 
   #Trying to recover TransactionID for to enable IST
   if [ -f "${DATADIR}/grastate.dat" ]; then
-    echo "Starting WSREP recovery process..."
+    echo "[IMAGENARIUM]: Starting WSREP recovery process..."
 
     log_file=$(mktemp /tmp/wsrep_recovery.XXXXXX)
 
@@ -93,7 +87,7 @@ else
     ret=$?
 
     if [ $ret -ne 0 ]; then
-      echo "WSREP: Failed to start mysqld for wsrep recovery: '`cat $log_file`'"
+      echo "[IMAGENARIUM]: Failed to start mysqld for wsrep recovery: '`cat $log_file`'"
     else
       recovered_pos="$(grep 'WSREP: Recovered position:' $log_file)"
 
@@ -101,13 +95,13 @@ else
         skipped="$(grep WSREP $log_file | grep 'skipping position recovery')"
 
         if [ -z "$skipped" ]; then
-          echo "WSREP: Failed to recover position: '`cat $log_file`'"
+          echo "[IMAGENARIUM]: Failed to recover position: '`cat $log_file`'"
         else
-          echo "WSREP: Position recovery skipped."
+          echo "[IMAGENARIUM]: Position recovery skipped"
         fi
       else
         start_pos="$(echo $recovered_pos | sed 's/.*WSREP\:\ Recovered\ position://' | sed 's/^[ \t]*//')"
-        echo "WSREP: Recovered position $start_pos"
+        echo "[IMAGENARIUM]: Recovered position $start_pos"
         CMDARG=$CMDARG" --wsrep_start_position=$start_pos"
       fi
     fi
@@ -137,6 +131,7 @@ mysqld \
 --log-bin=/var/log/mysql/mysqlbinlog \
 --log-slave-updates=1 \
 --expire-logs-days=7 \
+--max-binlog-size=1073741824 \
 \
 --log-output=file \
 --slow-query-log=ON \
@@ -169,11 +164,13 @@ if [[ "${init_node_first_run}" == true ]]; then
     echo "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` ;" | mysql
   fi
 
-  echo "Exec post_init script..."
+  echo "[IMAGENARIUM]: Exec post_init script..."
   ./post_init.sh
 fi
 
 #Start xinetd for HAProxy check status=================================
 /etc/init.d/xinetd start
+
+echo "[IMAGENARIUM]: ALL SYSTEMS GO"
 
 wait "$pid"

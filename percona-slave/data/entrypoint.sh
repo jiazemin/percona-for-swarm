@@ -8,34 +8,40 @@ if [ "${1:0:1}" = '-' ]; then
   CMDARG="$@"
 fi
 
-# get server_id from ip address
-ipaddr=$(hostname -i | awk ' { print $1 } ')
-server_id=$(echo $ipaddr | tr . '\n' | awk '{s = s*256 + $1} END {print s}')
-
-if [ -z "$MYSQL_PORT" ]; then
-  MYSQL_PORT=3306
-fi
-
 if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
-  echo >&2 '  You need to specify MYSQL_ROOT_PASSWORD '
+  echo >&2 "[IMAGENARIUM]: You need to specify MYSQL_ROOT_PASSWORD"
   exit 1
-fi
-
-if [ -z "$MYSQL_MASTER_ROOT_PASSWORD" ]; then
-  MYSQL_MASTER_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD"
 fi
 
 if [ -z "$MASTER_HOST" ]; then
-  echo >&2 '  You need to specify MASTER_HOST '
+  echo >&2 "[IMAGENARIUM]: You need to specify MASTER_HOST"
   exit 1
 fi
 
-if [ -z "$MASTER_PORT" ]; then
-  MASTER_PORT=3306
+if [ -z "$REPLICATED_DATABASES" ]; then
+  echo >&2 "[IMAGENARIUM]: You need to specify REPLICATED_DATABASES"
+  exit 1
 fi
 
+: ${MYSQL_PORT="3306"}
+: ${MYSQL_MASTER_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD}
+: ${MASTER_PORT="3306"}
+
+# get server_id from ip address
+ipaddr=$(hostname -i | awk ' { print $1 } ')
+server_id=$(./atoi.sh $ipaddr)
+first_run=false
+
+echo "[IMAGENARIUM]: Slave server id: ${server_id}"
+
 if [ ! -e "$DATADIR/mysql" ]; then
+  echo "[IMAGENARIUM]: Datadir not exists"
   ./init_datadir.sh
+  first_run=true
+else
+  echo "[IMAGENARIUM]: Check last modified of relay-log..."
+  last_modified=$(date +%s -r $(ls -Art ${DATADIR}/relay-bin.0* | tail -n 1))
+  echo "[IMAGENARIUM]: Last modified is: ${last_modified}"
 fi
 
 mysqld \
@@ -50,6 +56,7 @@ mysqld \
 --log-bin=/var/log/mysql/mysqlbinlog \
 --master-info-repository=TABLE \
 --relay-log-info-repository=TABLE \
+--relay-log=relay-bin \
 --slave-preserve-commit-order=1 \
 --slave-parallel-workers=8 \
 --slave-parallel-type=LOGICAL_CLOCK \
@@ -73,9 +80,9 @@ $CMDARG &
 
 pid="$!"
 
-./wait_mysql.sh $pid $MYSQL_PORT
+./wait_mysql.sh $pid 999999
 
-echo "Checking Percona XtraDB Cluster Node status..."
+echo "[IMAGENARIUM]: Checking Percona XtraDB Cluster Master Node status..."
 
 MYSQL_MASTER_CMDLINE="mysql -u root -p${MYSQL_MASTER_ROOT_PASSWORD} -h ${MASTER_HOST} -P ${MASTER_PORT} -nNE --connect-timeout=5"
 
@@ -85,34 +92,54 @@ if [ "${WSREP_STATUS}" == "4" ]; then
   READ_ONLY=$($MYSQL_MASTER_CMDLINE -e "SHOW GLOBAL VARIABLES LIKE 'read_only';" 2>/dev/null | tail -1 2>>/dev/null)
 
   if [ "${READ_ONLY}" == "ON" ]; then
-    echo "Percona XtraDB Cluster Node is read-only"
+    echo "[IMAGENARIUM]: Percona XtraDB Cluster Master Node is read-only"
     exit 1
   fi
 else
-    echo "Percona XtraDB Cluster Node is not synced. Status is: ${WSREP_STATUS}"
+    echo "[IMAGENARIUM]: Percona XtraDB Cluster Master Node is not synced. Status is: ${WSREP_STATUS}"
     exit 1
 fi
 
-echo "Percona XtraDB Cluster Node status is: ${WSREP_STATUS}"
+echo "[IMAGENARIUM]: Percona XtraDB Cluster Master Node status is: ${WSREP_STATUS}"
 
-mysqldump \
+mysql=( mysql --protocol=socket -uroot )
+
+function dump {
+  mysqldump \
   --protocol=tcp \
   --user=root \
   --password=$MYSQL_MASTER_ROOT_PASSWORD \
   --host=$MASTER_HOST \
   --port=$MASTER_PORT \
-  --all-databases \
+  --databases ${REPLICATED_DATABASES} \
   --triggers \
   --routines \
   --events \
   --add-drop-database \
   --single-transaction \
-  | mysql -u root -p${MYSQL_ROOT_PASSWORD} -h 127.0.0.1 -P ${MYSQL_PORT}
+  | ${mysql[@]}
+}
 
-echo "Slave initialized, connecting to master..."
+if [[ "${first_run}" == true ]]; then
+  echo "[IMAGENARIUM]: First run. Performing mysqldump..."
+  dump
+  echo "[IMAGENARIUM]: Slave initialized, connecting to master..."
+  ${mysql[@]} -e "CHANGE MASTER TO MASTER_HOST='${MASTER_HOST}', MASTER_USER='root', MASTER_PASSWORD='${MYSQL_MASTER_ROOT_PASSWORD}', MASTER_AUTO_POSITION = 1; START SLAVE;"
+else
+  echo "[IMAGENARIUM]: Check days since last stop..."
+  now=$(date +%s)
+  interval=$(expr $now - $last_modified)
+  days=$(($interval/60/60/24))
+  echo "[IMAGENARIUM]: Last access to relay log was ${days} days ago"
 
-mysql -u root -p${MYSQL_ROOT_PASSWORD} -h 127.0.0.1 -P ${MYSQL_PORT} -e "CHANGE MASTER TO MASTER_HOST='${MASTER_HOST}', MASTER_USER='root', MASTER_PASSWORD='${MYSQL_MASTER_ROOT_PASSWORD}', MASTER_AUTO_POSITION = 1; START SLAVE;"
+  if (($days > 5)); then
+    echo "[IMAGENARIUM]: Datadir too old. Using mysqldump to restore full backup..."
+    dump
+  fi
+fi
 
 /etc/init.d/xinetd start
+
+echo "[IMAGENARIUM]: ALL SYSTEMS GO"
 
 wait "$pid"

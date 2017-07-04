@@ -3,7 +3,7 @@ set -e
 
 dc_count=$1
 constr=$2
-image_version=5.7.16.6
+image_version=5.7.16.9
 
 if [ -z "$1" ]; then
   echo ""
@@ -22,6 +22,9 @@ for ((i=1;i<=$dc_count;i++)) do
   echo "Starting percona slave service with constraint: ${constr:-dc${i}}..."
 
   docker service create --detach=true --network percona-dc${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name=percona_slave_dc${i} --constraint "engine.labels.dc == ${constr:-dc${i}}" \
+--mount "type=volume,source=percona_slave_data_volume${i},target=/var/lib/mysql" \
+--mount "type=volume,source=percona_slave_log_volume${i},target=/var/log/mysql" \
+-e "REPLICATED_DATABASES=test1" \
 -e "MYSQL_PORT=3307" \
 -e "SERVICE_PORTS=3307" \
 -e "TCP_PORTS=3307" \
