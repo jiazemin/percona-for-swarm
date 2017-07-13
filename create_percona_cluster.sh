@@ -97,6 +97,7 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "12INTROSPECT_STATUS_DELTA_LONG=wsrep_local_bf_aborts" \
 -e "13INTROSPECT_STATUS_DELTA_LONG=wsrep_local_cert_failures" \
 -e "14INTROSPECT_STATUS=wsrep_local_state_comment" \
+-e "15INTROSPECT_MYSQL_USER=healthchecker" \
 ${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=${init_node_name},
 #set init node as donor for activate IST instead SST when the cluster starts
 
