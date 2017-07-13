@@ -3,9 +3,6 @@ set -e
 
 DATADIR=/var/lib/mysql
 
-rm -rf ${DATADIR}/*
-rm -rf /var/log/mysql/*
-
 echo "[IMAGENARIUM]: Init datadir..."
 
 mysqld --user=mysql --initialize-insecure
@@ -21,6 +18,9 @@ mysql=( mysql --protocol=socket -uroot )
   CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
   GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
   ALTER USER 'root'@'localhost' IDENTIFIED BY '';
+  CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '${XTRABACKUP_PASSWORD}';
+  GRANT RELOAD,PROCESS,LOCK TABLES,REPLICATION CLIENT ON *.* TO 'xtrabackup'@'localhost';
+  CREATE USER 'healthchecker'@'%' IDENTIFIED BY '' ;
   DROP DATABASE IF EXISTS test ;
   FLUSH PRIVILEGES ;
 EOSQL

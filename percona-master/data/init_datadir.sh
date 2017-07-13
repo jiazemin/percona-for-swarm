@@ -3,7 +3,7 @@ set -e
 
 DATADIR=/var/lib/mysql
 
-echo "[IMAGENARIUM]: Preparing data dir for first start..."
+echo "[IMAGENARIUM]: Init datadir..."
 
 mysqld --user=mysql --initialize-insecure
 mysqld --user=mysql --skip-networking &
@@ -11,7 +11,9 @@ pid="$!"
 
 ./wait_mysql.sh ${pid} 30
 
-mysql <<-EOSQL
+mysql=( mysql --protocol=socket -uroot )
+
+"${mysql[@]}" <<-EOSQL
   SET @@SESSION.SQL_LOG_BIN=0;
   CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
   GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;

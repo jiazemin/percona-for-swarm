@@ -4,7 +4,7 @@ set -e
 dc_count=$1
 constr=$2
 image_name=imagenarium/percona-master
-image_version=5.7.16.27
+image_version=5.7.16.28
 haproxy_version=1.6.7
 net_mask=100.0.0
 percona_service_name="percona_master_dc"
