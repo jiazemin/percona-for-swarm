@@ -67,13 +67,6 @@ else
     echo "[IMAGENARIUM]: Join to the new cluster. Use init node as donor: ${nodeArray[0]}. Delete old data and logs if exists"
     rm -rf ${DATADIR}/*
     rm -rf /var/log/mysql/*
-
-    #Not necessary, but speed up initial cluster start (activate IST instead SST)
-    if [ "${SKIP_INIT}" == "true" ]; then
-      echo "[IMAGENARIUM]: Restore datadir from backup..."
-      cp -R /backup_datadir/* ${DATADIR}
-      chown -R mysql:mysql ${DATADIR}
-    fi
   else
     echo "[IMAGENARIUM]: Join to the existing cluster"
     #Maybe useful when wsrep_sst_method=mysqldump

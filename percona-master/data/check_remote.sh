@@ -13,8 +13,8 @@ MYSQL_CMDLINE="mysql -u healthchecker -h ${MYSQL_HOST} -P ${MYSQL_PORT} -nNE --c
 
 echo "[IMAGENARIUM]: Checking ${MYSQL_HOST} node status..."
 
-#wait 30s
-for ((i=300;i!=0;i--)); do
+#wait 180s
+for ((i=180;i!=0;i--)); do
   WSREP_STATUS=$($MYSQL_CMDLINE -e "SHOW STATUS LIKE 'wsrep_local_state';" 2>/dev/null | tail -1 2>>/dev/null)
 
   if [ "${WSREP_STATUS}" == "4" ]; then
@@ -23,7 +23,7 @@ for ((i=300;i!=0;i--)); do
   fi
 
   echo "${i}"
-  sleep 0.1
+  sleep 1
 done
 
 if [ "$i" = 0 ]; then

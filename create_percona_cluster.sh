@@ -4,7 +4,7 @@ set -e
 dc_count=$1
 constr=$2
 image_name=imagenarium/percona-master
-image_version=5.7.16.25
+image_version=5.7.16.27
 haproxy_version=1.6.7
 net_mask=100.0.0
 percona_service_name="percona_master_dc"
@@ -49,7 +49,6 @@ echo "Starting percona init service with constraint: ${constr:-dc1}..."
 docker service create --detach=true --network ${global_percona_net} --name ${init_node_name} --secret mysql_root_password --constraint "engine.labels.dc == ${constr:-dc1}" \
 -e "MYSQL_ROOT_PASSWORD_FILE=/run/secrets/mysql_root_password" \
 -e "GMCAST_SEGMENT=1" \
--e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
 -e "logdog=true" \
 ${image_name}:${image_version} --wsrep_node_name=${init_node_name}
@@ -78,7 +77,6 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "OPTION=httpchk OPTIONS * HTTP/1.1\r\nHost:\ www" \
 -e "MYSQL_ROOT_PASSWORD_FILE=/run/secrets/mysql_root_password" \
 -e "CLUSTER_JOIN=${nodes}" \
--e "SKIP_INIT=true" \
 -e "XTRABACKUP_USE_MEMORY=128M" \
 -e "GMCAST_SEGMENT=${i}" \
 -e "NETMASK=${net_mask}" \
