@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 containerId=$1
 
 if [ -z "${containerId}" ]; then
@@ -20,3 +21,5 @@ rm -f ./data/backup_datadir/xb_doublewrite
 rm -f ./data/backup_datadir/*slow.log
 rm -f ./data/backup_datadir/galera.cache
 rm -f ./data/backup_datadir/ib_logfile*
+
+#you need to set seqno position from percona log to grastate.dat
