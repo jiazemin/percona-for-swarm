@@ -20,6 +20,7 @@ if [[ -z "${SKIP_INIT}" || "${SKIP_INIT}" == "false" ]]; then
     ALTER USER 'root'@'localhost' IDENTIFIED BY '';
     CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '${XTRABACKUP_PASSWORD}';
     GRANT RELOAD,PROCESS,LOCK TABLES,REPLICATION CLIENT ON *.* TO 'xtrabackup'@'localhost';
+    CREATE USER 'healthchecker'@'%' IDENTIFIED BY '' ;
     DROP DATABASE IF EXISTS test ;
     FLUSH PRIVILEGES ;
 EOSQL

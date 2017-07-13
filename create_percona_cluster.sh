@@ -4,13 +4,12 @@ set -e
 dc_count=$1
 constr=$2
 image_name=imagenarium/percona-master
-image_version=5.7.16.22
+image_version=5.7.16.25
 haproxy_version=1.6.7
 net_mask=100.0.0
 percona_service_name="percona_master_dc"
 global_percona_net="percona-net"
 dc_percona_net="percona-dc"
-root_password="PassWord123"
 init_node_name="percona_init"
 start_time=$(date +%s%3N)
 
@@ -47,8 +46,8 @@ done
 set -e
 
 echo "Starting percona init service with constraint: ${constr:-dc1}..."
-docker service create --detach=true --network ${global_percona_net} --name ${init_node_name} --constraint "engine.labels.dc == ${constr:-dc1}" \
--e "MYSQL_ROOT_PASSWORD=${root_password}" \
+docker service create --detach=true --network ${global_percona_net} --name ${init_node_name} --secret mysql_root_password --constraint "engine.labels.dc == ${constr:-dc1}" \
+-e "MYSQL_ROOT_PASSWORD_FILE=/run/secrets/mysql_root_password" \
 -e "GMCAST_SEGMENT=1" \
 -e "SKIP_INIT=true" \
 -e "NETMASK=${net_mask}" \
@@ -56,11 +55,7 @@ docker service create --detach=true --network ${global_percona_net} --name ${ini
 ${image_name}:${image_version} --wsrep_node_name=${init_node_name}
 #set node name "init_node_name" for sst donor search feature
 
-docker run --rm -it --network ${global_percona_net} \
--e "MYSQL_HOST=${init_node_name}" \
--e "MYSQL_ROOT_PASSWORD=${root_password}" \
---entrypoint /check_remote.sh \
-${image_name}:${image_version}
+docker run --rm -it --network ${global_percona_net} -e "MYSQL_HOST=${init_node_name}" --entrypoint /check_remote.sh ${image_name}:${image_version}
 
 for ((i=1;i<=$dc_count;i++)) do
   echo "Starting ${percona_service_name}${i} with constraint: ${constr:-dc${i}}..."
@@ -73,7 +68,7 @@ for ((i=1;i<=$dc_count;i++)) do
     fi
   done
 
-  docker service create --detach=true --network ${global_percona_net} --network ${dc_percona_net}${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name ${percona_service_name}${i} --constraint "engine.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=true --network ${global_percona_net} --network ${dc_percona_net}${i} --network monitoring --restart-delay 1m --restart-max-attempts 5 --name ${percona_service_name}${i} --secret mysql_root_password --constraint "engine.labels.dc == ${constr:-dc${i}}" \
 --mount "type=volume,source=percona_master_data_volume${i},target=/var/lib/mysql" \
 --mount "type=volume,source=percona_master_log_volume${i},target=/var/log/mysql" \
 -e "SERVICE_PORTS=3306" \
@@ -81,7 +76,7 @@ for ((i=1;i<=$dc_count;i++)) do
 -e "BALANCE=source" \
 -e "HEALTH_CHECK=check port 9200 inter 5000 rise 1 fall 2" \
 -e "OPTION=httpchk OPTIONS * HTTP/1.1\r\nHost:\ www" \
--e "MYSQL_ROOT_PASSWORD=${root_password}" \
+-e "MYSQL_ROOT_PASSWORD_FILE=/run/secrets/mysql_root_password" \
 -e "CLUSTER_JOIN=${nodes}" \
 -e "SKIP_INIT=true" \
 -e "XTRABACKUP_USE_MEMORY=128M" \
@@ -107,11 +102,7 @@ for ((i=1;i<=$dc_count;i++)) do
 ${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=${init_node_name},
 #set init node as donor for activate IST instead SST when the cluster starts
 
-  docker run --rm -it --network ${global_percona_net} \
--e "MYSQL_HOST=${percona_service_name}${i}" \
--e "MYSQL_ROOT_PASSWORD=${root_password}" \
---entrypoint /check_remote.sh \
-${image_name}:${image_version}
+  docker run --rm -it --network ${global_percona_net} -e "MYSQL_HOST=${percona_service_name}${i}" --entrypoint /check_remote.sh ${image_name}:${image_version}
 
   nodes=""  
 

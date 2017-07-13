@@ -1,6 +1,6 @@
 #!/bin/bash
 
-image_version=5.7.16.22
+image_version=5.7.16.25
 
 set -e
 

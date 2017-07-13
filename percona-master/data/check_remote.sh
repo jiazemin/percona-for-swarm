@@ -4,7 +4,12 @@ set -e
 
 : ${MYSQL_PORT="3306"}
 
-MYSQL_CMDLINE="mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${MYSQL_HOST} -P ${MYSQL_PORT} -nNE --connect-timeout=5"
+if [ -z "${MYSQL_HOST}" ]; then
+  echo >&2 "[IMAGENARIUM]: You need to specify MYSQL_HOST"
+  exit 1
+fi
+
+MYSQL_CMDLINE="mysql -u healthchecker -h ${MYSQL_HOST} -P ${MYSQL_PORT} -nNE --connect-timeout=5"
 
 echo "[IMAGENARIUM]: Checking ${MYSQL_HOST} node status..."
 
