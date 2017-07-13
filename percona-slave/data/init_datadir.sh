@@ -21,6 +21,7 @@ mysql=( mysql --protocol=socket -uroot )
   CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '${XTRABACKUP_PASSWORD}';
   GRANT RELOAD,PROCESS,LOCK TABLES,REPLICATION CLIENT ON *.* TO 'xtrabackup'@'localhost';
   CREATE USER 'healthchecker'@'%' IDENTIFIED BY '' ;
+  GRANT REPLICATION CLIENT ON *.* TO 'healthchecker'@'%';
   DROP DATABASE IF EXISTS test ;
   FLUSH PRIVILEGES ;
 EOSQL
