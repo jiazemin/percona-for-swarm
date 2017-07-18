@@ -108,8 +108,10 @@ ${image_name}:${image_version} --wsrep_slave_threads=2 --wsrep-sst-donor=${init_
 
   echo "Starting percona_proxy_dc${i} with constraint: ${constr:-dc${i}}..."
 
-  docker service create --detach=true --network ${dc_percona_net}${i} --name percona_proxy_dc${i} --mount target=/var/run/docker.sock,source=/var/run/docker.sock,type=bind --constraint "engine.labels.dc == ${constr:-dc${i}}" \
+  docker service create --detach=true --network ${dc_percona_net}${i} --network haproxy-monitoring --name percona_proxy_dc${i} --mount target=/var/run/docker.sock,source=/var/run/docker.sock,type=bind --constraint "engine.labels.dc == ${constr:-dc${i}}" \
 -e "EXTRA_GLOBAL_SETTINGS=stats socket 0.0.0.0:14567" \
+-e "INTROSPECT_PORT=14567" \
+-e "INTROSPECT_PROTOCOL=haproxy" \
 dockercloud/haproxy:${haproxy_version}
 
 done

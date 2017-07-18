@@ -147,7 +147,7 @@ else
   fi
 fi
 
-/etc/init.d/xinetd start
+sudo /etc/init.d/xinetd start
 
 echo "[IMAGENARIUM]: ALL SYSTEMS GO"
 

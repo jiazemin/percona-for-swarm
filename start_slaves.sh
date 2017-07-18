@@ -3,7 +3,7 @@ set -e
 
 dc_count=$1
 constr=$2
-image_version=5.7.16.12
+image_version=5.7.16.14
 
 if [ -z "$1" ]; then
   echo ""

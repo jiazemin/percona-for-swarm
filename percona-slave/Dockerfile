@@ -4,9 +4,12 @@ USER root
 
 RUN apt-get update \
 && apt-get install -y xinetd \
+&& apt-get install -y sudo \
 && apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install -y --force-yes percona-toolkit \
 && apt-get clean \
-&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+&& adduser mysql sudo \
+&& echo "mysql ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 COPY data/ /
 
