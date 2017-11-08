@@ -1,9 +1,7 @@
-FROM percona/percona-xtradb-cluster:5.7.16
+FROM percona/percona-xtradb-cluster:5.7.19
 
 RUN apt-get update \
-&& apt-get install -y xinetd \
-&& apt-get install -y lsb-release \
-&& apt-get install -y wget \
+&& apt-get install -y xinetd lsb-release \
 && wget https://repo.percona.com/apt/percona-release_0.1-4.$(lsb_release -sc)_all.deb \
 && dpkg -i percona-release_0.1-4.$(lsb_release -sc)_all.deb \
 && apt-get update \

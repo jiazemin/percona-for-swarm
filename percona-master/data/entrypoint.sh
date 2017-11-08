@@ -64,15 +64,15 @@ else
   #if create new cluster (because percona_init is running) then: 
   if echo "SELECT 1" | "${mysql[@]}" &>/dev/null; then 
     #Delete old data and logs from named values========================================
-    echo "[IMAGENARIUM]: Join to the new cluster. Use init node as donor: ${nodeArray[0]}. Delete old data and logs if exists"
+    echo "[IMAGENARIUM]: Join to the new cluster. Delete old data and logs if exists"
     rm -rf ${DATADIR}/*
     rm -rf /var/log/mysql/*
   else
     echo "[IMAGENARIUM]: Join to the existing cluster"
-    #Maybe useful when wsrep_sst_method=mysqldump
     if [ ! -e "${DATADIR}/mysql" ]; then
-      echo "[IMAGENARIUM]: Init data dir"
-      ./init_datadir.sh
+      #maybee need init data dir for correct wsrep recovery?
+      echo "[IMAGENARIUM]: Init data dir not needed"
+      #./init_datadir.sh
     else
       echo "[IMAGENARIUM]: Data dir already exists for this node"
     fi
@@ -110,7 +110,7 @@ else
   fi
 fi
 
-mysqld \
+mysqld --console \
 --user=mysql \
 --port=${MYSQL_PORT} \
 \
