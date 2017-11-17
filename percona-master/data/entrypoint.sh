@@ -117,9 +117,13 @@ else
 fi
 
 #Starting MySQL==============================================================================================
+# use skip-host-cache and skip-name-resolve during bug: https://github.com/docker-library/mysql/issues/243
+
 mysqld \
 --user=mysql \
 --port=${MYSQL_PORT} \
+--skip-host-cache \
+--skip-name-resolve \
 \
 --wsrep_provider_options="gmcast.segment=${GMCAST_SEGMENT}; evs.send_window=512; evs.user_send_window=512; cert.log_conflicts=YES; gcache.size=2G; gcs.fc_limit=500; gcs.max_packet_size=1048576;" \
 --wsrep_cluster_name=${CLUSTER_NAME} \
