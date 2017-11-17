@@ -29,8 +29,10 @@ fi
 : ${XTRABACKUP_USE_MEMORY="128M"}
 
 if [ -z "${NETMASK}" ]; then
+  echo "[IMAGENARIUM]: NETMASK is not specified"
   ipaddr=$(hostname -i | awk '{ print $1; exit }')
 else
+  echo "[IMAGENARIUM]: Using NETMASK: ${NETMASK}"
   ipaddr=$(hostname -i |  tr ' ' '\n' | awk -vm=$NETMASK '$1 ~ m { print $1; exit }')
 fi
 
@@ -38,58 +40,62 @@ echo "[IMAGENARIUM]: Use WSREP node address:${ipaddr}"
 
 server_id=$(./atoi.sh $ipaddr)
 
-init_node_first_run=false
-
 if [ -z "${CLUSTER_JOIN}" ]; then
   echo "[IMAGENARIUM]: Starting Percona init node..."
-
-  if [ ! -e "${DATADIR}/mysql" ]; then
-    init_node_first_run=true
-    ./init_datadir.sh
-
-    #Add some options to xtrabackup====================================================
-    echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
-  fi
+  ./init_datadir.sh
 else
-  #Here we will always have a new container because it running as a new task in service mode
   #Add some options to xtrabackup====================================================
   echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
 
   IFS=',' read -ra nodeArray <<< "${CLUSTER_JOIN}"
 
-  echo "[IMAGENARIUM]: Try percona init node for donor: "${nodeArray[0]}
+  counter=0
+  firstNode=true
 
-  mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${nodeArray[0]} -P ${MYSQL_PORT} )
+  for node in "${nodeArray[@]}"; do
+    echo "[IMAGENARIUM]: Check connectivity to node: ${node}..."
 
-  #if create new cluster (because percona_init is running) then: 
-  if echo "SELECT 1" | "${mysql[@]}" &>/dev/null; then 
-    #Delete old data and logs from named values========================================
-    echo "[IMAGENARIUM]: Join to the new cluster. Delete old data and logs if exists"
-    rm -rf ${DATADIR}/*
-    rm -rf /var/log/mysql/*
-  else
-    echo "[IMAGENARIUM]: Join to the existing cluster"
-    if [ ! -e "${DATADIR}/mysql" ]; then
-      #maybee need init data dir for correct wsrep recovery?
-      echo "[IMAGENARIUM]: Init data dir not needed"
-      #./init_datadir.sh
-    else
-      echo "[IMAGENARIUM]: Data dir already exists for this node"
+    mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${node} -P ${MYSQL_PORT} )
+
+    if echo "SELECT 1" | "${mysql[@]}" &>/dev/null; then
+      firstNode=false
+
+      if [ $counter == 0 ]; then
+        echo "[IMAGENARIUM]: Join to the new cluster. Delete old data and logs if exists"
+        rm -rf ${DATADIR}/*
+        rm -rf /var/log/mysql/*
+      else
+        echo "[IMAGENARIUM]: Join to the existing cluster"
+      fi
+
+      break
     fi
+
+    echo "[IMAGENARIUM]: Can't connect to node: ${node}"
+
+    counter=$((counter+1))
+  done
+
+  if [ $firstNode == true ]; then
+    CLUSTER_JOIN=""
   fi
 
-  #Trying to recover TransactionID for to enable IST
+  #Trying to recover TransactionID for enable IST or whole cluster restart ==============================
   if [ -f "${DATADIR}/grastate.dat" ]; then
     echo "[IMAGENARIUM]: Starting WSREP recovery process..."
 
-    log_file=$(mktemp /tmp/wsrep_recovery.XXXXXX)
+    log_file=/var/log/mysqld.log
 
-    eval mysqld --user=mysql --wsrep_recover 2> "$log_file"
+    truncate -s0 $log_file
+
+    eval mysqld --user=mysql --wsrep_recover
+
+    echo "[IMAGENARIUM]: Recovery result was written to log file"
 
     ret=$?
 
     if [ $ret -ne 0 ]; then
-      echo "[IMAGENARIUM]: Failed to start mysqld for wsrep recovery: '`cat $log_file`'"
+      echo "[IMAGENARIUM]: Failed to start mysqld for wsrep recovery"
     else
       recovered_pos="$(grep 'WSREP: Recovered position:' $log_file)"
 
@@ -97,7 +103,7 @@ else
         skipped="$(grep WSREP $log_file | grep 'skipping position recovery')"
 
         if [ -z "$skipped" ]; then
-          echo "[IMAGENARIUM]: Failed to recover position: '`cat $log_file`'"
+          echo "[IMAGENARIUM]: Failed to recover position"
         else
           echo "[IMAGENARIUM]: Position recovery skipped"
         fi
@@ -110,7 +116,8 @@ else
   fi
 fi
 
-mysqld --console \
+#Starting MySQL==============================================================================================
+mysqld \
 --user=mysql \
 --port=${MYSQL_PORT} \
 \
@@ -153,22 +160,11 @@ pid="$!"
 
 ./wait_mysql.sh ${pid} 999999
 
-#=======================================================================
-#Change password if datadir was restored from binary data independent from init_node_first_run param, because init_node_first_run is taken only on init node
+#Alter password========================================================
 mysql <<-EOSQL
   ALTER USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
   FLUSH PRIVILEGES;
 EOSQL
-
-#First run steps========================================================
-if [[ "${init_node_first_run}" == true ]]; then
-  if [ "${MYSQL_DATABASE}" ]; then
-    echo "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` ;" | mysql
-  fi
-
-  echo "[IMAGENARIUM]: Exec post_init script..."
-  ./post_init.sh
-fi
 
 #Start xinetd for HAProxy check status=================================
 /etc/init.d/xinetd start
