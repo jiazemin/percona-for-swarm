@@ -16,5 +16,4 @@ RUN chmod +x /usr/bin/clustercheck \
 && chmod +x /atoi.sh \
 && chmod +x /init_datadir.sh \
 && chmod +x /wait_mysql.sh \
-&& chmod +x /post_init.sh \
 && chmod +x /check_remote.sh
