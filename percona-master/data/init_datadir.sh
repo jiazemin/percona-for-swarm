@@ -27,7 +27,7 @@ EOSQL
 
 if ! kill -s TERM "$pid" || ! wait "$pid"; then
   echo >&2 "[IMAGENARIUM]: MySQL init process failed"
-  exit 1
+  exit 0
 fi
 
 echo "[IMAGENARIUM]: MySQL init process done. Ready for start up"

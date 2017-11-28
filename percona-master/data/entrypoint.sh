@@ -10,7 +10,7 @@ fi
 
 if [[ -z "${MYSQL_ROOT_PASSWORD}" && -z "${MYSQL_ROOT_PASSWORD_FILE}" ]]; then
   echo >&2 "[IMAGENARIUM]: You need to specify MYSQL_ROOT_PASSWORD or MYSQL_ROOT_PASSWORD_FILE"
-  exit 1
+  exit 0
 fi
 
 if [ ! -z "${MYSQL_ROOT_PASSWORD_FILE}" ]; then
@@ -18,7 +18,7 @@ if [ ! -z "${MYSQL_ROOT_PASSWORD_FILE}" ]; then
     MYSQL_ROOT_PASSWORD=$(cat ${MYSQL_ROOT_PASSWORD_FILE})
   else
     echo >&2 "[IMAGENARIUM]: Password file ${MYSQL_ROOT_PASSWORD_FILE} not found"
-    exit 1
+    exit 0
   fi
 fi
 

@@ -6,7 +6,7 @@ set -e
 
 if [ -z "${MYSQL_HOST}" ]; then
   echo >&2 "[IMAGENARIUM]: You need to specify MYSQL_HOST"
-  exit 1
+  exit 0
 fi
 
 MYSQL_CMDLINE="mysql -u healthchecker -h ${MYSQL_HOST} -P ${MYSQL_PORT} -nNE --connect-timeout=5"
@@ -28,5 +28,5 @@ done
 
 if [ "$i" = 0 ]; then
   echo >&2 "[IMAGENARIUM]: ${MYSQL_HOST} not ready"
-  exit 1
+  exit 0
 fi
