@@ -40,9 +40,12 @@ echo "[IMAGENARIUM]: Use WSREP node address:${ipaddr}"
 
 server_id=$(./atoi.sh $ipaddr)
 
+initNode="false"
+
 if [ -z "${CLUSTER_JOIN}" ]; then
   echo "[IMAGENARIUM]: Starting Percona init node..."
   ./init_datadir.sh
+  initNode="true"
 else
   #Add some options to xtrabackup====================================================
   echo -e "[xtrabackup]\nuse-memory=${XTRABACKUP_USE_MEMORY}" >> /etc/mysql/my.cnf
@@ -55,18 +58,30 @@ else
   for node in "${nodeArray[@]}"; do
     echo "[IMAGENARIUM]: Check connectivity to node: ${node}..."
 
-    mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${node} -P ${MYSQL_PORT} )
+    mysql=( mysql -u root -p${MYSQL_ROOT_PASSWORD} -h ${node} -P ${MYSQL_PORT} -nNE )
 
     if echo "SELECT 1" | "${mysql[@]}" &>/dev/null; then
       firstNode=false
 
-      if [ $counter == 0 ]; then
-        echo "[IMAGENARIUM]: Join to the new cluster. Delete old data and logs if exists"
-        rm -rf ${DATADIR}/*
-        rm -rf /var/log/mysql/*
+      uniqueId=$(echo "select * from imagenarium.unique_id" | ${mysql[@]} | tail -1)
+
+      echo "[IMAGENARIUM]: Successfull connect to node ${node}. Cluster uniqueId: ${uniqueId}"
+
+      if [ -f /var/log/unique_id.txt ]; then
+        savedUniqueId=$(cat /var/log/unique_id.txt)
+
+        echo "[IMAGENARIUM]: savedUniqueId: ${savedUniqueId}, cluster uniqueId: ${uniqueId}"
+
+        if [ $uniqueId != $savedUniqueId ]; then
+          echo "[IMAGENARIUM]: Found old volume. Delete stale data..."
+          rm -rf ${DATADIR}/*
+          rm -rf /var/log/mysql/*
+        fi
       else
-        echo "[IMAGENARIUM]: Join to the existing cluster"
+        echo "[IMAGENARIUM]: /var/log/unique_id.txt not found"
       fi
+
+      echo ${uniqueId} > /var/log/unique_id.txt
 
       break
     fi
@@ -125,7 +140,7 @@ mysqld \
 --skip-host-cache \
 --skip-name-resolve \
 \
---wsrep_provider_options="gmcast.segment=${GMCAST_SEGMENT}; evs.send_window=512; evs.user_send_window=512; cert.log_conflicts=YES; gcache.size=2G; gcs.fc_limit=500; gcs.max_packet_size=1048576;" \
+--wsrep_provider_options="gmcast.segment=${GMCAST_SEGMENT}; evs.send_window=512; evs.user_send_window=512; cert.log_conflicts=YES; gcache.size=2G; gcache.recover=yes; gcs.fc_limit=500; gcs.max_packet_size=1048576;" \
 --wsrep_cluster_name=${CLUSTER_NAME} \
 --wsrep_cluster_address="gcomm://${CLUSTER_JOIN}" \
 --wsrep_node_address="${ipaddr}" \
@@ -163,6 +178,18 @@ $CMDARG &
 pid="$!"
 
 ./wait_mysql.sh ${pid} 999999
+
+#Generate random value ================================================
+if [ $initNode == "true" ]; then
+randomValue=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
+
+mysql <<-EOSQL
+  create database imagenarium;
+  use imagenarium;
+  CREATE TABLE unique_id (value varchar(256) NOT NULL, PRIMARY KEY (value));
+  insert into unique_id values('${randomValue}');
+EOSQL
+fi
 
 #Alter password========================================================
 mysql <<-EOSQL
